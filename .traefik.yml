@@ -1,12 +1,9 @@
-displayName: Demo Plugin
+displayName: Customizable Auth Forward
 type: middleware
 iconPath: .assets/icon.png
 
-import: github.com/traefik/plugindemo
+import: github.com/xabinapal/traefik-customizable-auth-forward-plugin
 
-summary: '[Demo] Add Request Header'
+summary: Drop-in replacement for native forward auth middleware with extra options
 
-testData:
-  Headers:
-    X-Demo: test
-    X-URL: '{{URL}}'
+testData: {}
