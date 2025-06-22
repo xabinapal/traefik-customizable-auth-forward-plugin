@@ -1,0 +1,63 @@
+---
+name: traefik-customizable-auth-forward-plugin
+
+services:
+  traefik:
+    image: docker.io/library/traefik:v3.4.1
+    command:
+      - --log.level=DEBUG
+      - --api.insecure=true
+
+      - --entrypoints.http.address=:80
+
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+
+      - --experimental.localPlugins.customizable-auth-forward.modulename=github.com/xabinapal/traefik-customizable-auth-forward-plugin
+    networks:
+      - traefik
+    ports:
+      - 8000:80
+      - 8080:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ../../:/plugins-local/src/github.com/xabinapal/traefik-customizable-auth-forward-plugin:ro
+
+  test-server:
+    build: ../../test-server
+    networks:
+      - traefik
+    labels:
+      - traefik.enable=true
+
+      - traefik.http.routers.test-server-allow.rule=Path(`/allow`)
+      - traefik.http.routers.test-server-allow.middlewares=auth-allow,strip-prefix
+
+      - traefik.http.routers.test-server-deny.rule=Path(`/deny`)
+      - traefik.http.routers.test-server-deny.middlewares=auth-deny,strip-prefix
+
+      - traefik.http.routers.test-server-redirect.rule=Path(`/redirect`)
+      - traefik.http.routers.test-server-redirect.middlewares=auth-redirect,strip-prefix
+
+      - traefik.http.services.test-server.loadbalancer.server.port=3000
+
+      - traefik.http.middlewares.strip-prefix.stripprefixregex.regex=/.*
+
+      - traefik.http.middlewares.auth-allow.plugin.customizable-auth-forward.address=http://test-server:3000/auth
+      - traefik.http.middlewares.auth-allow.plugin.customizable-auth-forward.headerPrefix=X-Original
+      - traefik.http.middlewares.auth-allow.plugin.customizable-auth-forward.authResponseHeadersRegex=^X-Auth-.*
+      - traefik.http.middlewares.auth-allow.plugin.customizable-auth-forward.trustForwardHeader=false
+
+      - traefik.http.middlewares.auth-deny.plugin.customizable-auth-forward.address=http://test-server:3000/auth/deny
+      - traefik.http.middlewares.auth-deny.plugin.customizable-auth-forward.headerPrefix=X-Original
+      - traefik.http.middlewares.auth-deny.plugin.customizable-auth-forward.authResponseHeadersRegex=^X-Auth-.*
+      - traefik.http.middlewares.auth-deny.plugin.customizable-auth-forward.trustForwardHeader=false
+
+      - traefik.http.middlewares.auth-redirect.plugin.customizable-auth-forward.address=http://test-server:3000/auth/redirect
+      - traefik.http.middlewares.auth-redirect.plugin.customizable-auth-forward.headerPrefix=X-Original
+      - traefik.http.middlewares.auth-redirect.plugin.customizable-auth-forward.authResponseHeadersRegex=^X-Auth-.*
+      - traefik.http.middlewares.auth-redirect.plugin.customizable-auth-forward.trustForwardHeader=false
+
+networks:
+  traefik:
+    driver: bridge 

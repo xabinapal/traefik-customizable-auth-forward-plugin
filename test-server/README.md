@@ -21,10 +21,10 @@ npm run dev
 
 ```bash
 # build container image
-docker build -t traefik-customizable-auth-test-server .
+docker build -t traefik-customizable-auth-forward-test-server .
 
 # run container
-docker run --rm -p 3000:3000 traefik-customizable-auth-test-server
+docker run --rm -p 3000:3000 traefik-customizable-auth-forward-test-server
 ```
 
 ## Usage

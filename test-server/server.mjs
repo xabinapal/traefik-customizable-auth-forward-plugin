@@ -38,16 +38,11 @@ app.all('/auth/deny', (req, res) => {
 });
 
 app.all('/auth/redirect', (req, res) => {
-  return res.status(302).location('/').send('Found');
+  return res.status(302).location('https://the-internet.herokuapp.com/status_codes/301').send('Found');
 });
 
 const server = app.listen(PORT, () => {
-  console.log(`Trasefik Customizable Auth Test Server running on port ${PORT}`);
-  console.log(`Available endpoints:`);
-  console.log(`  • / - Debug information`);
-  console.log(`  • /auth/ - Returns 200 with auth headers`);
-  console.log(`  • /auth/deny - Returns 401 unauthorized`);
-  console.log(`  • /auth/redirect - Returns 302 redirect`);
+  console.log(`Traefik Customizable Auth Forward Test Server running on port ${PORT}`);
 });
 
 const shutdown = (signal) => {
