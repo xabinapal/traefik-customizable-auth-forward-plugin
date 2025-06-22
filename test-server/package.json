@@ -1,0 +1,20 @@
+{
+  "name": "traefik-customizable-auth-test-server",
+  "description": "Simple test server for Traefik Customizable Forward Auth Plugin testing",
+  "version": "1.0.0",
+  "private": true,
+  "author": "Xabier Napal",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "nodemon server.mjs"
+  },
+  "dependencies": {
+    "express": "5.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "3.1.10"
+  }
+} 
