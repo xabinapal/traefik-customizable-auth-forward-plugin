@@ -1,19 +1,13 @@
-package traefik_customizable_auth_forward_plugin
+package internal
 
-import (
-	"context"
-	"fmt"
-	"net/http"
-)
+import "time"
 
-const (
-	defaultHeaderPrefix = "X-Forwarded"
-)
-
-// Config the plugin configuration.
 type Config struct {
 	// Address is the URL of the authentication service
 	Address string `json:"address,omitempty"`
+
+	// Timeout for auth service requests
+	Timeout time.Duration `json:"timeout,omitempty"`
 
 	// TLS configuration for secure connection to auth service
 	TLS *TLSConfig `json:"tls,omitempty"`
@@ -64,52 +58,12 @@ type TLSConfig struct {
 	// Key is the path to the private key file
 	Key string `json:"key,omitempty"`
 
+	// MinVersion is the minimum TLS version to use
+	MinVersion uint16 `json:"minVersion,omitempty"`
+
+	// MaxVersion is the maximum TLS version to use
+	MaxVersion uint16 `json:"maxVersion,omitempty"`
+
 	// InsecureSkipVerify indicates whether to skip certificate verification
 	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
-}
-
-func CreateConfig() *Config {
-	return &Config{
-		Address: "",
-		TLS: &TLSConfig{
-			CA:                 "",
-			Cert:               "",
-			Key:                "",
-			InsecureSkipVerify: false,
-		},
-		HeaderPrefix:             defaultHeaderPrefix,
-		TrustForwardHeader:       false,
-		AuthRequestHeaders:       []string{},
-		AddAuthCookiesToResponse: []string{},
-		AuthResponseHeaders:      []string{},
-		AuthResponseHeadersRegex: "",
-		ForwardBody:              false,
-		MaxBodySize:              -1,
-		HeaderField:              "",
-		PreserveRequestMethod:    false,
-		PreserveLocationHeader:   false,
-	}
-}
-
-type CustomizableAuthForward struct {
-	client *http.Client
-	next   http.Handler
-	name   string
-	config *Config
-}
-
-func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
-	if config.Address == "" {
-		return nil, fmt.Errorf("address cannot be empty")
-	}
-
-	return &CustomizableAuthForward{
-		next:   next,
-		name:   name,
-		config: config,
-	}, nil
-}
-
-func (cfa *CustomizableAuthForward) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	cfa.next.ServeHTTP(rw, req)
 }
