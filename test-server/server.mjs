@@ -38,7 +38,8 @@ app.all('/auth/deny', (req, res) => {
 });
 
 app.all('/auth/redirect', (req, res) => {
-  return res.status(302).location('https://the-internet.herokuapp.com/status_codes/301').send('Found');
+  const location = req.query.url || 'https://the-internet.herokuapp.com/status_codes/301';
+  return res.status(302).location(location).send('Found');
 });
 
 const server = app.listen(PORT, () => {

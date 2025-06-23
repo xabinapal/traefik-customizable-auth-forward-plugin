@@ -109,14 +109,36 @@ func (cfa *Plugin) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	fmt.Printf("auth request returned status code %v\n", authRes.StatusCode)
 
-	cfa.attachAuthResponseHeaders(req, authRes)
-	cfa.attachAuthResponseCookies(req, authRes)
-
 	// If auth service returns non-2xx status, forward its response
 	if authRes.StatusCode < http.StatusOK || authRes.StatusCode >= http.StatusMultipleChoices {
 		fmt.Printf("forwarding auth response to client\n")
 
+		location := authRes.Header.Get("Location")
+		if location != "" {
+			if cfa.config.PreserveLocationHeader {
+				locationUrl, err := url.Parse(location)
+				if err != nil {
+					return
+				}
+
+				if !locationUrl.IsAbs() {
+					addressURL, err := url.Parse(cfa.config.Address)
+					if err != nil {
+						return
+					}
+
+					locationUrl.Scheme = addressURL.Scheme
+					locationUrl.Host = addressURL.Host
+
+					location = locationUrl.String()
+				}
+			}
+
+			rw.Header().Add("Location", location)
+		}
+
 		rw.WriteHeader(authRes.StatusCode)
+
 		if _, err := io.Copy(rw, authRes.Body); err != nil {
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 			return
@@ -124,21 +146,18 @@ func (cfa *Plugin) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	cfa.attachAuthResponseHeaders(req, authRes)
+	cfa.attachAuthResponseCookies(req, authRes)
+
 	cfa.next.ServeHTTP(rw, req)
 }
 
 func (cfa *Plugin) attachAuthResponseHeaders(req *http.Request, authRes *http.Response) {
-	locationPresent := false
-
 	for _, header := range cfa.config.AuthResponseHeaders {
 		header := http.CanonicalHeaderKey(header)
 
 		if values := authRes.Header.Values(header); len(values) > 0 {
 			req.Header.Add(header, values[0])
-
-			if header == http.CanonicalHeaderKey("Location") {
-				locationPresent = true
-			}
 		}
 	}
 
@@ -148,31 +167,7 @@ func (cfa *Plugin) attachAuthResponseHeaders(req *http.Request, authRes *http.Re
 
 			if cfa.headersRegex.MatchString(headerKey) {
 				req.Header[headerKey] = headerValues
-
-				if headerKey == http.CanonicalHeaderKey("Location") {
-					locationPresent = true
-				}
 			}
-		}
-	}
-
-	if locationPresent && cfa.config.PreserveLocationHeader {
-		location := req.Header.Get("Location")
-		if location != "" {
-			locationURL, err := url.Parse(location)
-			if err != nil {
-				return
-			}
-
-			addressURL, err := url.Parse(cfa.config.Address)
-			if err != nil {
-				return
-			}
-
-			locationURL.Scheme = addressURL.Scheme
-			locationURL.Host = addressURL.Host
-
-			req.Header.Set("Location", locationURL.String())
 		}
 	}
 }
