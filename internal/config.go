@@ -12,19 +12,26 @@ type Config struct {
 	// TLS configuration for secure connection to auth service
 	TLS *TLSConfig `json:"tls,omitempty"`
 
-	// HeaderPrefix allows customization of the forwarded header names
+	// PreserveRequestMethod indicates whether to preserve the original request method
+	PreserveRequestMethod bool `json:"preserveRequestMethod,omitempty"`
+
+	// HeaderPrefix allows customization of the authentication header names
 	// Default is "X-Forwarded" which results in standard headers like "X-Forwarded-Host"
 	// Setting this to "X-Original" would result in "X-Original-Host", etc.
 	HeaderPrefix string `json:"headerPrefix,omitempty"`
 
-	// TrustForwardHeader indicates whether to trust existing forward headers
+	// TrustForwardHeader indicates whether to use existing forward headers in the original request
+	// as the values for the authentication headers in the auth request
 	TrustForwardHeader bool `json:"trustForwardHeader,omitempty"`
 
 	// AuthRequestHeaders is a list of headers to copy from original request to auth request
 	AuthRequestHeaders []string `json:"authRequestHeaders,omitempty"`
 
-	// AddAuthCookiesToResponse is a list of cookie names to copy from auth response
-	AddAuthCookiesToResponse []string `json:"addAuthCookiesToResponse,omitempty"`
+	// AuthRequestHeadersRegex is a regex pattern to match headers to copy from original request
+	AuthRequestHeadersRegex string `json:"authRequestHeadersRegex,omitempty"`
+
+	// AddAuthCookiesToRequest is a list of cookie names to copy from original request to auth request
+	AddAuthCookiesToRequest []string `json:"addAuthCookiesToRequest,omitempty"`
 
 	// AuthResponseHeaders is a list of headers to copy from auth response to the forwarded request
 	AuthResponseHeaders []string `json:"authResponseHeaders,omitempty"`
@@ -32,20 +39,17 @@ type Config struct {
 	// AuthResponseHeadersRegex is a regex pattern to match headers to copy from auth response
 	AuthResponseHeadersRegex string `json:"authResponseHeadersRegex,omitempty"`
 
+	// AddAuthCookiesToResponse is a list of cookie names to copy from auth response
+	AddAuthCookiesToResponse []string `json:"addAuthCookiesToResponse,omitempty"`
+
+	// PreserveLocationHeader indicates whether to preserve the Location header from auth response
+	PreserveLocationHeader bool `json:"preserveLocationHeader,omitempty"`
+
 	// ForwardBody indicates whether to forward the request body to the auth service
 	ForwardBody bool `json:"forwardBody,omitempty"`
 
 	// MaxBodySize sets the maximum size of the body to forward (default: 64KB)
 	MaxBodySize int64 `json:"maxBodySize,omitempty"`
-
-	// HeaderField specifies which header field to use for storing authenticated user info
-	HeaderField string `json:"headerField,omitempty"`
-
-	// PreserveRequestMethod indicates whether to preserve the original request method
-	PreserveRequestMethod bool `json:"preserveRequestMethod,omitempty"`
-
-	// PreserveLocationHeader indicates whether to preserve the Location header from auth response
-	PreserveLocationHeader bool `json:"preserveLocationHeader,omitempty"`
 }
 
 type TLSConfig struct {
