@@ -6,14 +6,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal"
 	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal/httputil"
 )
 
 const (
-	defaultTimeout      = 30 * time.Second
+	defaultTimeout      = "30s"
 	defaultHeaderPrefix = "X-Forwarded"
 )
 

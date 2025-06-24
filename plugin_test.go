@@ -19,7 +19,7 @@ func TestCreateConfig(t *testing.T) {
 
 	// Verify all default values are set correctly
 	test.AssertEqual(t, "", config.Address)
-	test.AssertEqual(t, 30*time.Second, config.Timeout)
+	test.AssertEqual(t, "30s", config.Timeout)
 	test.AssertEqual(t, "X-Forwarded", config.HeaderPrefix)
 	test.AssertFalse(t, config.PreserveRequestMethod)
 	test.AssertFalse(t, config.TrustForwardHeader)
@@ -54,7 +54,7 @@ func TestNew(t *testing.T) {
 	t.Run("successful creation", func(t *testing.T) {
 		config := &internal.Config{
 			Address: "http://auth.example.com",
-			Timeout: 10 * time.Second,
+			Timeout: "10s",
 		}
 
 		handler, err := plugin.New(ctx, next, config, "test-plugin")
@@ -65,7 +65,7 @@ func TestNew(t *testing.T) {
 	t.Run("empty address returns error", func(t *testing.T) {
 		config := &internal.Config{
 			Address: "",
-			Timeout: 10 * time.Second,
+			Timeout: "10s",
 		}
 
 		handler, err := plugin.New(ctx, next, config, "test-plugin")
@@ -575,7 +575,7 @@ func TestServeHTTP_TimeoutScenarios(t *testing.T) {
 
 		config := plugin.CreateConfig()
 		config.Address = authServer.URL
-		config.Timeout = 50 * time.Millisecond // Very short timeout
+		config.Timeout = "50ms"
 
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			t.Error("next handler should not be called on timeout")

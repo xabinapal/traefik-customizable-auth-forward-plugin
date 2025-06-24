@@ -19,7 +19,7 @@ func TestNewClient(t *testing.T) {
 		config := &ConfigParsed{
 			Config: Config{
 				Address: "http://auth.example.com",
-				Timeout: 30 * time.Second,
+				Timeout: "30s",
 			},
 		}
 
@@ -35,7 +35,7 @@ func TestNewClient(t *testing.T) {
 		config := &ConfigParsed{
 			Config: Config{
 				Address: "https://auth.example.com",
-				Timeout: 15 * time.Second,
+				Timeout: "15s",
 				TLS: &TLSConfig{
 					MinVersion:         12, // Internal version 12 = TLS 1.2
 					MaxVersion:         13, // Internal version 13 = TLS 1.3
@@ -65,7 +65,7 @@ func TestNewClient(t *testing.T) {
 		config := &ConfigParsed{
 			Config: Config{
 				Address: "http://auth.example.com",
-				Timeout: 30 * time.Second,
+				Timeout: "30s",
 			},
 		}
 
@@ -84,7 +84,7 @@ func TestNewClient(t *testing.T) {
 		config := &ConfigParsed{
 			Config: Config{
 				Address: "http://auth.example.com",
-				Timeout: 30 * time.Second,
+				Timeout: "30s",
 				TLS:     nil,
 			},
 		}

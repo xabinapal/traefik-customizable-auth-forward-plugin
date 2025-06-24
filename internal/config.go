@@ -13,7 +13,7 @@ type Config struct {
 	Address string `json:"address,omitempty"`
 
 	// Timeout for auth service requests
-	Timeout time.Duration `json:"timeout,omitempty"`
+	Timeout string `json:"timeout,omitempty"`
 
 	// TLS configuration for secure connection to auth service
 	TLS *TLSConfig `json:"tls,omitempty"`
@@ -84,6 +84,8 @@ type TLSConfig struct {
 type ConfigParsed struct {
 	Config
 
+	Timeout time.Duration
+
 	AuthRequestForHeader    string
 	AuthRequestMethodHeader string
 	AuthRequestProtoHeader  string
@@ -97,9 +99,17 @@ type ConfigParsed struct {
 }
 
 func ParseConfig(config *Config) (*ConfigParsed, error) {
-	// Validate config
 	if config.Address == "" {
 		return nil, fmt.Errorf("address cannot be empty")
+	}
+
+	timeout := 30 * time.Second
+	if config.Timeout != "" {
+		if parsedTimeout, err := time.ParseDuration(config.Timeout); err == nil {
+			timeout = parsedTimeout
+		} else {
+			return nil, fmt.Errorf("error parsing timeout: %w", err)
+		}
 	}
 
 	if config.HeaderPrefix == "" {
@@ -158,6 +168,8 @@ func ParseConfig(config *Config) (*ConfigParsed, error) {
 
 	configParsed := &ConfigParsed{
 		Config: *config,
+
+		Timeout: timeout,
 
 		AuthRequestForHeader:    http.CanonicalHeaderKey(config.HeaderPrefix + "-For"),
 		AuthRequestMethodHeader: http.CanonicalHeaderKey(config.HeaderPrefix + "-Method"),

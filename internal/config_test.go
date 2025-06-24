@@ -243,7 +243,7 @@ func TestParseConfig_ComplexRegexPatterns(t *testing.T) {
 func TestParseConfig_FullConfiguration(t *testing.T) {
 	config := &internal.Config{
 		Address:                  "https://auth.example.com:8443",
-		Timeout:                  60 * time.Second,
+		Timeout:                  "60s",
 		HeaderPrefix:             "X-Custom",
 		AbsoluteUrlHeader:        "Full-Url",
 		TrustForwardHeader:       true,
@@ -271,9 +271,12 @@ func TestParseConfig_FullConfiguration(t *testing.T) {
 	test.RequireNoError(t, err)
 	test.RequireNotNil(t, parsed)
 
+	parsedTimeout, err := time.ParseDuration(config.Timeout)
+	test.RequireNoError(t, err)
+
 	// Verify all original config is preserved
 	test.AssertEqual(t, config.Address, parsed.Address)
-	test.AssertEqual(t, config.Timeout, parsed.Timeout)
+	test.AssertEqual(t, parsedTimeout, parsed.Timeout)
 	test.AssertEqual(t, config.TrustForwardHeader, parsed.TrustForwardHeader)
 	test.AssertEqual(t, config.PreserveRequestMethod, parsed.PreserveRequestMethod)
 	test.AssertEqual(t, config.PreserveLocationHeader, parsed.PreserveLocationHeader)
