@@ -262,8 +262,8 @@ func TestParseConfig_FullConfiguration(t *testing.T) {
 			CA:                 "/etc/ssl/ca.pem",
 			Cert:               "/etc/ssl/cert.pem",
 			Key:                "/etc/ssl/key.pem",
-			MinVersion:         771, // TLS 1.2
-			MaxVersion:         772, // TLS 1.3
+			MinVersion:         12,
+			MaxVersion:         13,
 			InsecureSkipVerify: false,
 		},
 	}
@@ -304,4 +304,103 @@ func TestParseConfig_FullConfiguration(t *testing.T) {
 
 	assert.True(t, parsed.AuthResponseHeadersRegex.MatchString("X-Auth-User"))
 	assert.False(t, parsed.AuthResponseHeadersRegex.MatchString("X-Other-User"))
+}
+
+func TestParseConfig_TLS(t *testing.T) {
+	t.Run("nil TLS config uses defaults", func(t *testing.T) {
+		config := &internal.Config{
+			Address: "http://auth.example.com",
+			TLS:     nil,
+		}
+
+		parsed, err := internal.ParseConfig(config)
+		require.NoError(t, err)
+		require.NotNil(t, parsed.TLS)
+
+		assert.Equal(t, uint16(12), parsed.TLS.MinVersion)
+		assert.Equal(t, uint16(13), parsed.TLS.MaxVersion)
+		assert.True(t, parsed.TLS.InsecureSkipVerify)
+	})
+
+	t.Run("partial TLS config fills in defaults", func(t *testing.T) {
+		config := &internal.Config{
+			Address: "http://auth.example.com",
+			TLS: &internal.TLSConfig{
+				CA:   "/path/to/ca.pem",
+				Cert: "/path/to/cert.pem",
+				// MinVersion and MaxVersion left as zero values
+			},
+		}
+
+		parsed, err := internal.ParseConfig(config)
+		require.NoError(t, err)
+		require.NotNil(t, parsed.TLS)
+
+		assert.Equal(t, "/path/to/ca.pem", parsed.TLS.CA)
+		assert.Equal(t, "/path/to/cert.pem", parsed.TLS.Cert)
+		assert.Equal(t, uint16(12), parsed.TLS.MinVersion) // Default
+		assert.Equal(t, uint16(13), parsed.TLS.MaxVersion) // Default
+	})
+
+	t.Run("TLS version validation - valid range", func(t *testing.T) {
+		testCases := []struct {
+			name       string
+			minVersion uint16
+			maxVersion uint16
+		}{
+			{"TLS 1.0 to 1.3", 10, 13},
+			{"TLS 1.1 to 1.2", 11, 12},
+			{"TLS 1.2 to 1.3", 12, 13},
+			{"Same version", 12, 12},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				config := &internal.Config{
+					Address: "http://auth.example.com",
+					TLS: &internal.TLSConfig{
+						MinVersion: tc.minVersion,
+						MaxVersion: tc.maxVersion,
+					},
+				}
+
+				parsed, err := internal.ParseConfig(config)
+				require.NoError(t, err)
+				assert.Equal(t, tc.minVersion, parsed.TLS.MinVersion)
+				assert.Equal(t, tc.maxVersion, parsed.TLS.MaxVersion)
+			})
+		}
+	})
+
+	t.Run("TLS version validation - invalid range", func(t *testing.T) {
+		testCases := []struct {
+			name       string
+			minVersion uint16
+			maxVersion uint16
+			errorMsg   string
+		}{
+			{"MinVersion too low", 9, 13, "minVersion must be between 10 and 13"},
+			{"MinVersion too high", 14, 13, "minVersion must be between 10 and 13"},
+			{"MaxVersion too low", 12, 9, "maxVersion must be between 10 and 13"},
+			{"MaxVersion too high", 12, 14, "maxVersion must be between 10 and 13"},
+			{"MinVersion > MaxVersion", 13, 12, "minVersion cannot be greater than maxVersion"},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				config := &internal.Config{
+					Address: "http://auth.example.com",
+					TLS: &internal.TLSConfig{
+						MinVersion: tc.minVersion,
+						MaxVersion: tc.maxVersion,
+					},
+				}
+
+				parsed, err := internal.ParseConfig(config)
+				assert.Error(t, err)
+				assert.Nil(t, parsed)
+				assert.Contains(t, err.Error(), tc.errorMsg)
+			})
+		}
+	})
 }

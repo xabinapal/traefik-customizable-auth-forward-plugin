@@ -2,8 +2,10 @@ package traefik_customizable_auth_forward_plugin_test
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -463,4 +465,222 @@ func TestServeHTTP_RequestHeaders(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServeHTTP_BodyForwarding(t *testing.T) {
+	tests := []struct {
+		name          string
+		forwardBody   bool
+		maxBodySize   int64
+		requestBody   string
+		expectedError bool
+		description   string
+	}{
+		{
+			name:        "body forwarding disabled",
+			forwardBody: false,
+			requestBody: "test body",
+			description: "should not forward body when disabled",
+		},
+		{
+			name:        "body forwarding enabled",
+			forwardBody: true,
+			requestBody: "test body",
+			description: "should forward body when enabled",
+		},
+		{
+			name:        "body forwarding with size limit",
+			forwardBody: true,
+			maxBodySize: 5,
+			requestBody: "this is a long body that should be truncated",
+			description: "should truncate body when max size is set",
+		},
+		{
+			name:        "empty body with forwarding enabled",
+			forwardBody: true,
+			requestBody: "",
+			description: "should handle empty body gracefully",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var receivedBody []byte
+
+			// Create auth server that captures the request body
+			authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Body != nil {
+					body, _ := io.ReadAll(r.Body)
+					receivedBody = body
+				}
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("OK"))
+			}))
+			defer authServer.Close()
+
+			config := plugin.CreateConfig()
+			config.Address = authServer.URL
+			config.ForwardBody = tt.forwardBody
+			config.MaxBodySize = tt.maxBodySize
+
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("Success from next handler"))
+			})
+
+			handler, err := plugin.New(context.Background(), next, config, "test-plugin")
+			require.NoError(t, err)
+
+			var req *http.Request
+			if tt.requestBody != "" {
+				req = httptest.NewRequest("POST", "http://example.com/test", strings.NewReader(tt.requestBody))
+			} else {
+				req = httptest.NewRequest("POST", "http://example.com/test", nil)
+			}
+			recorder := httptest.NewRecorder()
+
+			handler.ServeHTTP(recorder, req)
+
+			if tt.forwardBody && tt.requestBody != "" {
+				if tt.maxBodySize > 0 && int64(len(tt.requestBody)) > tt.maxBodySize {
+					expectedTruncated := tt.requestBody[:tt.maxBodySize]
+					if len(receivedBody) > 0 {
+						assert.Equal(t, expectedTruncated, string(receivedBody), "Body should be truncated to max size")
+					}
+				} else {
+					if len(receivedBody) > 0 {
+						assert.Equal(t, tt.requestBody, string(receivedBody), "Body should be forwarded completely")
+					}
+				}
+			} else if !tt.forwardBody {
+				// When body forwarding is disabled, auth request should have no body or empty body
+				assert.Empty(t, receivedBody, "Body should not be forwarded when disabled")
+			}
+
+			assert.Equal(t, http.StatusOK, recorder.Code)
+		})
+	}
+}
+
+func TestServeHTTP_TimeoutScenarios(t *testing.T) {
+	t.Run("auth service timeout", func(t *testing.T) {
+		// Create a slow auth server
+		authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(200 * time.Millisecond) // Longer than our timeout
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer authServer.Close()
+
+		config := plugin.CreateConfig()
+		config.Address = authServer.URL
+		config.Timeout = 50 * time.Millisecond // Very short timeout
+
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Error("next handler should not be called on timeout")
+		})
+
+		handler, err := plugin.New(context.Background(), next, config, "test-plugin")
+		require.NoError(t, err)
+
+		req := httptest.NewRequest("GET", "http://example.com/test", nil)
+		recorder := httptest.NewRecorder()
+
+		handler.ServeHTTP(recorder, req)
+
+		assert.Equal(t, http.StatusInternalServerError, recorder.Code)
+		assert.Contains(t, recorder.Body.String(), "context deadline exceeded")
+	})
+}
+
+func TestServeHTTP_AdvancedHeaderScenarios(t *testing.T) {
+	t.Run("trust forward header scenarios", func(t *testing.T) {
+		tests := []struct {
+			name               string
+			trustForwardHeader bool
+			existingHeaders    map[string]string
+			expectedForwarded  map[string]string
+		}{
+			{
+				name:               "trust existing forward headers",
+				trustForwardHeader: true,
+				existingHeaders: map[string]string{
+					"X-Forwarded-For":    "203.0.113.1",
+					"X-Forwarded-Proto":  "https",
+					"X-Forwarded-Host":   "trusted.example.com",
+					"X-Forwarded-Method": "PUT",
+					"X-Forwarded-Uri":    "/trusted/path",
+				},
+				expectedForwarded: map[string]string{
+					"X-Forwarded-For":    "203.0.113.1",
+					"X-Forwarded-Proto":  "https",
+					"X-Forwarded-Host":   "trusted.example.com",
+					"X-Forwarded-Method": "PUT",
+					"X-Forwarded-Uri":    "/trusted/path",
+				},
+			},
+			{
+				name:               "ignore existing forward headers when not trusted",
+				trustForwardHeader: false,
+				existingHeaders: map[string]string{
+					"X-Forwarded-For":   "203.0.113.1",
+					"X-Forwarded-Proto": "https",
+					"X-Forwarded-Host":  "untrusted.example.com",
+				},
+				expectedForwarded: map[string]string{
+					"X-Forwarded-Proto":  "http", // Determined from request
+					"X-Forwarded-Host":   "example.com",
+					"X-Forwarded-Method": "GET",
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				var capturedHeaders http.Header
+
+				authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					capturedHeaders = r.Header.Clone()
+					w.WriteHeader(http.StatusOK)
+				}))
+				defer authServer.Close()
+
+				config := plugin.CreateConfig()
+				config.Address = authServer.URL
+				config.TrustForwardHeader = tt.trustForwardHeader
+
+				next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+				})
+
+				handler, err := plugin.New(context.Background(), next, config, "test-plugin")
+				require.NoError(t, err)
+
+				req := httptest.NewRequest("GET", "http://example.com/test", nil)
+				req.RemoteAddr = "192.168.1.100:12345"
+
+				// Set existing forward headers
+				for key, value := range tt.existingHeaders {
+					req.Header.Set(key, value)
+				}
+
+				recorder := httptest.NewRecorder()
+				handler.ServeHTTP(recorder, req)
+
+				// Verify expected headers were forwarded to auth service
+				if tt.trustForwardHeader {
+					// When trusting, should use the provided forward headers
+					for key, expectedValue := range tt.expectedForwarded {
+						actualValue := capturedHeaders.Get(key)
+						assert.Equal(t, expectedValue, actualValue, "Header %s should match expected value", key)
+					}
+				} else {
+					// When not trusting, should generate new headers from request
+					assert.Equal(t, "192.168.1.100", capturedHeaders.Get("X-Forwarded-For"))
+					assert.Equal(t, "http", capturedHeaders.Get("X-Forwarded-Proto"))
+					assert.Equal(t, "example.com", capturedHeaders.Get("X-Forwarded-Host"))
+					assert.Equal(t, "GET", capturedHeaders.Get("X-Forwarded-Method"))
+				}
+			})
+		}
+	})
 }

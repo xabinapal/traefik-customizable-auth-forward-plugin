@@ -39,8 +39,8 @@ func TestNewClient(t *testing.T) {
 				Address: "https://auth.example.com",
 				Timeout: 15 * time.Second,
 				TLS: &TLSConfig{
-					MinVersion:         tls.VersionTLS12,
-					MaxVersion:         tls.VersionTLS13,
+					MinVersion:         12, // Internal version 12 = TLS 1.2
+					MaxVersion:         13, // Internal version 13 = TLS 1.3
 					InsecureSkipVerify: true,
 				},
 			},
@@ -56,8 +56,10 @@ func TestNewClient(t *testing.T) {
 		// Verify TLS config was applied
 		transport := client.client.Transport.(*http.Transport)
 		tlsConfig := transport.TLSClientConfig
-		assert.Equal(t, uint16(tls.VersionTLS12), tlsConfig.MinVersion)
-		assert.Equal(t, uint16(tls.VersionTLS13), tlsConfig.MaxVersion)
+		// 769 + 12 - 10 = 771 = TLS 1.2
+		assert.Equal(t, uint16(771), tlsConfig.MinVersion)
+		// 769 + 13 - 10 = 772 = TLS 1.3
+		assert.Equal(t, uint16(772), tlsConfig.MaxVersion)
 		assert.True(t, tlsConfig.InsecureSkipVerify)
 	})
 
