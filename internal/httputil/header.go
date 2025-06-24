@@ -1,9 +1,8 @@
-package internal
+package httputil
 
 import (
 	"net/http"
 	"regexp"
-	"slices"
 )
 
 func CopyHeaders(src http.Header, dst http.Header, filter []string) {
@@ -30,28 +29,6 @@ func CopyHeadersRegex(src http.Header, dst http.Header, regex *regexp.Regexp) {
 			for _, value := range headerValues {
 				dst.Add(headerKey, value)
 			}
-		}
-	}
-}
-
-type Cookier interface {
-	Cookies() []*http.Cookie
-}
-
-type CookieAdder interface {
-	AddCookie(cookie *http.Cookie)
-}
-
-func CopyCookies(src Cookier, dst CookieAdder, filter []string) {
-	if len(filter) == 0 {
-		return
-	}
-
-	cookies := src.Cookies()
-
-	for _, cookie := range cookies {
-		if slices.Contains(filter, cookie.Name) {
-			dst.AddCookie(cookie)
 		}
 	}
 }

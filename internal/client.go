@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+
+	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal/httputil"
 )
 
 type Client struct {
@@ -57,10 +59,10 @@ func (c *Client) CreateAuthRequest(req *http.Request) (*http.Request, error) {
 		return nil, fmt.Errorf("error creating auth request: %w", err)
 	}
 
-	CopyHeaders(req.Header, authReq.Header, c.config.AuthRequestHeaders)
-	CopyHeadersRegex(req.Header, authReq.Header, c.config.AuthRequestHeadersRegex)
+	httputil.CopyHeaders(req.Header, authReq.Header, c.config.AuthRequestHeaders)
+	httputil.CopyHeadersRegex(req.Header, authReq.Header, c.config.AuthRequestHeadersRegex)
 
-	CopyCookies(req, authReq, c.config.AuthRequestCookies)
+	httputil.CopyCookies(req, authReq, c.config.AuthRequestCookies)
 
 	c.setAuthRequestHeaders(req, authReq)
 

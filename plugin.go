@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal"
+	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal/httputil"
 )
 
 const (
@@ -104,7 +105,7 @@ func (cfa *Plugin) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	if authRes.StatusCode < http.StatusOK || authRes.StatusCode >= http.StatusMultipleChoices {
 		fmt.Printf("forwarding auth response to client\n")
 
-		internal.CopyHeaders(authRes.Header, rw.Header(), []string{})
+		httputil.CopyHeaders(authRes.Header, rw.Header(), []string{})
 
 		location := authRes.Header.Get("Location")
 		if location != "" {
@@ -140,10 +141,13 @@ func (cfa *Plugin) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	internal.CopyHeaders(authRes.Header, req.Header, cfa.config.AuthResponseHeaders)
-	internal.CopyHeadersRegex(authRes.Header, req.Header, cfa.config.AuthResponseHeadersRegex)
+	responseModifier := httputil.NewResponseModifier(rw)
 
-	internal.CopyCookies(authRes, req, cfa.config.AddAuthCookiesToResponse)
+	httputil.CopyHeaders(authRes.Header, req.Header, cfa.config.AuthResponseHeaders)
+	httputil.CopyHeadersRegex(authRes.Header, req.Header, cfa.config.AuthResponseHeadersRegex)
 
-	cfa.next.ServeHTTP(rw, req)
+	httputil.CopyCookies(authRes, req, cfa.config.AddAuthCookiesToResponse)
+	httputil.CopyCookies(authRes, responseModifier, cfa.config.AddAuthCookiesToResponse)
+
+	cfa.next.ServeHTTP(responseModifier, req)
 }

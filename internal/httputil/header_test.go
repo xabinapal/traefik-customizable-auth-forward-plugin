@@ -1,4 +1,4 @@
-package internal
+package httputil_test
 
 import (
 	"net/http"
@@ -6,122 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal/httputil"
 )
-
-func TestCopyCookies(t *testing.T) {
-	t.Run("copies specified cookies", func(t *testing.T) {
-		// Create source request with cookies
-		srcReq, _ := http.NewRequest("GET", "http://example.com", nil)
-		srcReq.AddCookie(&http.Cookie{Name: "session", Value: "abc123"})
-		srcReq.AddCookie(&http.Cookie{Name: "user", Value: "john"})
-		srcReq.AddCookie(&http.Cookie{Name: "csrf", Value: "token456"})
-		srcReq.AddCookie(&http.Cookie{Name: "other", Value: "skip"})
-
-		// Create destination request
-		dstReq, _ := http.NewRequest("GET", "http://auth.example.com", nil)
-
-		// Copy specific cookies
-		filter := []string{"session", "user"}
-		CopyCookies(srcReq, dstReq, filter)
-
-		// Verify cookies were copied
-		cookies := dstReq.Cookies()
-		cookieNames := make([]string, len(cookies))
-		cookieValues := make(map[string]string)
-		for i, cookie := range cookies {
-			cookieNames[i] = cookie.Name
-			cookieValues[cookie.Name] = cookie.Value
-		}
-
-		assert.Len(t, cookies, 2)
-		assert.Contains(t, cookieNames, "session")
-		assert.Contains(t, cookieNames, "user")
-		assert.NotContains(t, cookieNames, "csrf")
-		assert.NotContains(t, cookieNames, "other")
-		assert.Equal(t, "abc123", cookieValues["session"])
-		assert.Equal(t, "john", cookieValues["user"])
-	})
-
-	t.Run("empty filter copies no cookies", func(t *testing.T) {
-		srcReq, _ := http.NewRequest("GET", "http://example.com", nil)
-		srcReq.AddCookie(&http.Cookie{Name: "session", Value: "abc123"})
-
-		dstReq, _ := http.NewRequest("GET", "http://auth.example.com", nil)
-
-		CopyCookies(srcReq, dstReq, []string{})
-
-		assert.Len(t, dstReq.Cookies(), 0)
-	})
-
-	t.Run("nil filter copies no cookies", func(t *testing.T) {
-		srcReq, _ := http.NewRequest("GET", "http://example.com", nil)
-		srcReq.AddCookie(&http.Cookie{Name: "session", Value: "abc123"})
-
-		dstReq, _ := http.NewRequest("GET", "http://auth.example.com", nil)
-
-		CopyCookies(srcReq, dstReq, nil)
-
-		assert.Len(t, dstReq.Cookies(), 0)
-	})
-
-	t.Run("filter with non-existent cookie names", func(t *testing.T) {
-		srcReq, _ := http.NewRequest("GET", "http://example.com", nil)
-		srcReq.AddCookie(&http.Cookie{Name: "session", Value: "abc123"})
-
-		dstReq, _ := http.NewRequest("GET", "http://auth.example.com", nil)
-
-		filter := []string{"nonexistent", "alsononexistent"}
-		CopyCookies(srcReq, dstReq, filter)
-
-		assert.Len(t, dstReq.Cookies(), 0)
-	})
-
-	t.Run("duplicate cookie names in filter", func(t *testing.T) {
-		srcReq, _ := http.NewRequest("GET", "http://example.com", nil)
-		srcReq.AddCookie(&http.Cookie{Name: "session", Value: "abc123"})
-
-		dstReq, _ := http.NewRequest("GET", "http://auth.example.com", nil)
-
-		filter := []string{"session", "session", "session"}
-		CopyCookies(srcReq, dstReq, filter)
-
-		// Should only copy once despite multiple entries in filter
-		cookies := dstReq.Cookies()
-		assert.Len(t, cookies, 1)
-		assert.Equal(t, "session", cookies[0].Name)
-		assert.Equal(t, "abc123", cookies[0].Value)
-	})
-
-	t.Run("cookies with same name but different attributes", func(t *testing.T) {
-		srcReq, _ := http.NewRequest("GET", "http://example.com", nil)
-		cookie := &http.Cookie{
-			Name:     "session",
-			Value:    "abc123",
-			Path:     "/api",
-			Domain:   "example.com",
-			HttpOnly: true,
-			Secure:   true,
-		}
-		srcReq.AddCookie(cookie)
-
-		dstReq, _ := http.NewRequest("GET", "http://auth.example.com", nil)
-
-		filter := []string{"session"}
-		CopyCookies(srcReq, dstReq, filter)
-
-		cookies := dstReq.Cookies()
-		assert.Len(t, cookies, 1)
-		copiedCookie := cookies[0]
-		assert.Equal(t, "session", copiedCookie.Name)
-		assert.Equal(t, "abc123", copiedCookie.Value)
-		// Note: Go's AddCookie method only preserves Name and Value
-		// Other attributes are not copied by the CopyCookies function
-		assert.Equal(t, "", copiedCookie.Path)
-		assert.Equal(t, "", copiedCookie.Domain)
-		assert.False(t, copiedCookie.HttpOnly)
-		assert.False(t, copiedCookie.Secure)
-	})
-}
 
 func TestCopyHeaders(t *testing.T) {
 	t.Run("copies specified headers", func(t *testing.T) {
@@ -134,7 +20,7 @@ func TestCopyHeaders(t *testing.T) {
 		dstHeaders := http.Header{}
 
 		filter := []string{"Authorization", "X-API-Key"}
-		CopyHeaders(srcHeaders, dstHeaders, filter)
+		httputil.CopyHeaders(srcHeaders, dstHeaders, filter)
 
 		assert.Equal(t, "Bearer token123", dstHeaders.Get("Authorization"))
 		assert.Equal(t, "key456", dstHeaders.Get("X-API-Key"))
@@ -151,7 +37,7 @@ func TestCopyHeaders(t *testing.T) {
 		dstHeaders := http.Header{}
 
 		filter := []string{"X-Custom"}
-		CopyHeaders(srcHeaders, dstHeaders, filter)
+		httputil.CopyHeaders(srcHeaders, dstHeaders, filter)
 
 		values := dstHeaders.Values("X-Custom")
 		assert.Len(t, values, 3)
@@ -166,7 +52,7 @@ func TestCopyHeaders(t *testing.T) {
 
 		dstHeaders := http.Header{}
 
-		CopyHeaders(srcHeaders, dstHeaders, []string{})
+		httputil.CopyHeaders(srcHeaders, dstHeaders, []string{})
 
 		assert.Len(t, dstHeaders, 0)
 	})
@@ -177,7 +63,7 @@ func TestCopyHeaders(t *testing.T) {
 
 		dstHeaders := http.Header{}
 
-		CopyHeaders(srcHeaders, dstHeaders, nil)
+		httputil.CopyHeaders(srcHeaders, dstHeaders, nil)
 
 		assert.Len(t, dstHeaders, 0)
 	})
@@ -189,7 +75,7 @@ func TestCopyHeaders(t *testing.T) {
 		dstHeaders := http.Header{}
 
 		filter := []string{"NonExistent", "AlsoNonExistent"}
-		CopyHeaders(srcHeaders, dstHeaders, filter)
+		httputil.CopyHeaders(srcHeaders, dstHeaders, filter)
 
 		assert.Len(t, dstHeaders, 0)
 	})
@@ -203,7 +89,7 @@ func TestCopyHeaders(t *testing.T) {
 
 		// HTTP headers are case-insensitive, but Go canonicalizes them
 		filter := []string{"Authorization", "x-api-key"}
-		CopyHeaders(srcHeaders, dstHeaders, filter)
+		httputil.CopyHeaders(srcHeaders, dstHeaders, filter)
 
 		// Go's http.Header canonicalizes header names
 		assert.Equal(t, "Bearer token123", dstHeaders.Get("Authorization"))
@@ -219,7 +105,7 @@ func TestCopyHeaders(t *testing.T) {
 		dstHeaders.Set("Other-Header", "other")
 
 		filter := []string{"X-Custom"}
-		CopyHeaders(srcHeaders, dstHeaders, filter)
+		httputil.CopyHeaders(srcHeaders, dstHeaders, filter)
 
 		// Should add to existing header, not replace
 		values := dstHeaders.Values("X-Custom")
@@ -243,7 +129,7 @@ func TestCopyHeadersRegex(t *testing.T) {
 		dstHeaders := http.Header{}
 
 		regex := regexp.MustCompile("(?i)^X-Auth-.*")
-		CopyHeadersRegex(srcHeaders, dstHeaders, regex)
+		httputil.CopyHeadersRegex(srcHeaders, dstHeaders, regex)
 
 		assert.Equal(t, "john", dstHeaders.Get("X-Auth-User"))
 		assert.Equal(t, "admin", dstHeaders.Get("X-Auth-Role"))
@@ -260,7 +146,7 @@ func TestCopyHeadersRegex(t *testing.T) {
 		dstHeaders := http.Header{}
 
 		regex := regexp.MustCompile("(?i)^authorization$")
-		CopyHeadersRegex(srcHeaders, dstHeaders, regex)
+		httputil.CopyHeadersRegex(srcHeaders, dstHeaders, regex)
 
 		// Go canonicalizes header names, so only the last set value is preserved
 		// http.Header.Set() replaces previous values
@@ -275,7 +161,7 @@ func TestCopyHeadersRegex(t *testing.T) {
 
 		dstHeaders := http.Header{}
 
-		CopyHeadersRegex(srcHeaders, dstHeaders, nil)
+		httputil.CopyHeadersRegex(srcHeaders, dstHeaders, nil)
 
 		assert.Len(t, dstHeaders, 0)
 	})
@@ -288,7 +174,7 @@ func TestCopyHeadersRegex(t *testing.T) {
 		dstHeaders := http.Header{}
 
 		regex := regexp.MustCompile("(?i)^X-NonExistent-.*")
-		CopyHeadersRegex(srcHeaders, dstHeaders, regex)
+		httputil.CopyHeadersRegex(srcHeaders, dstHeaders, regex)
 
 		assert.Len(t, dstHeaders, 0)
 	})
@@ -304,7 +190,7 @@ func TestCopyHeadersRegex(t *testing.T) {
 
 		// Match headers starting with X-Custom-
 		regex := regexp.MustCompile("(?i)^X-Custom-.*")
-		CopyHeadersRegex(srcHeaders, dstHeaders, regex)
+		httputil.CopyHeadersRegex(srcHeaders, dstHeaders, regex)
 
 		assert.Equal(t, "value1", dstHeaders.Get("X-Custom-Header"))
 		assert.Equal(t, "value2", dstHeaders.Get("X-Custom-Other"))
@@ -321,7 +207,7 @@ func TestCopyHeadersRegex(t *testing.T) {
 		dstHeaders := http.Header{}
 
 		regex := regexp.MustCompile("(?i)^X-Auth-.*")
-		CopyHeadersRegex(srcHeaders, dstHeaders, regex)
+		httputil.CopyHeadersRegex(srcHeaders, dstHeaders, regex)
 
 		values := dstHeaders.Values("X-Auth-Token")
 		assert.Len(t, values, 2)
@@ -339,7 +225,7 @@ func TestCopyHeadersRegex(t *testing.T) {
 		dstHeaders.Set("Other-Header", "other")
 
 		regex := regexp.MustCompile("(?i)^X-Auth-.*")
-		CopyHeadersRegex(srcHeaders, dstHeaders, regex)
+		httputil.CopyHeadersRegex(srcHeaders, dstHeaders, regex)
 
 		// Should add to existing header
 		values := dstHeaders.Values("X-Auth-User")
