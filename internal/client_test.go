@@ -6,14 +6,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
-	"regexp"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal/test"
 )
 
 func TestNewClient(t *testing.T) {
@@ -26,11 +24,11 @@ func TestNewClient(t *testing.T) {
 		}
 
 		client, err := NewClient(config)
-		require.NoError(t, err)
-		assert.NotNil(t, client)
-		assert.NotNil(t, client.client)
-		assert.Equal(t, config, client.config)
-		assert.Equal(t, 30*time.Second, client.client.Timeout)
+		test.RequireNoError(t, err)
+		test.AssertNotNil(t, client)
+		test.AssertNotNil(t, client.client)
+		test.AssertEqual(t, config, client.config)
+		test.AssertEqual(t, 30*time.Second, client.client.Timeout)
 	})
 
 	t.Run("creates client with TLS configuration", func(t *testing.T) {
@@ -47,20 +45,20 @@ func TestNewClient(t *testing.T) {
 		}
 
 		client, err := NewClient(config)
-		require.NoError(t, err)
-		assert.NotNil(t, client)
+		test.RequireNoError(t, err)
+		test.AssertNotNil(t, client)
 
 		// Verify timeout
-		assert.Equal(t, 15*time.Second, client.client.Timeout)
+		test.AssertEqual(t, 15*time.Second, client.client.Timeout)
 
 		// Verify TLS config was applied
 		transport := client.client.Transport.(*http.Transport)
 		tlsConfig := transport.TLSClientConfig
 		// 769 + 12 - 10 = 771 = TLS 1.2
-		assert.Equal(t, uint16(771), tlsConfig.MinVersion)
+		test.AssertEqual(t, uint16(771), tlsConfig.MinVersion)
 		// 769 + 13 - 10 = 772 = TLS 1.3
-		assert.Equal(t, uint16(772), tlsConfig.MaxVersion)
-		assert.True(t, tlsConfig.InsecureSkipVerify)
+		test.AssertEqual(t, uint16(772), tlsConfig.MaxVersion)
+		test.AssertTrue(t, tlsConfig.InsecureSkipVerify)
 	})
 
 	t.Run("client does not follow redirects", func(t *testing.T) {
@@ -72,14 +70,14 @@ func TestNewClient(t *testing.T) {
 		}
 
 		client, err := NewClient(config)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		// Create a test request
 		req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
 
 		// Test redirect behavior
 		redirectErr := client.client.CheckRedirect(req, []*http.Request{})
-		assert.Equal(t, http.ErrUseLastResponse, redirectErr)
+		test.AssertEqual(t, http.ErrUseLastResponse, redirectErr)
 	})
 
 	t.Run("nil TLS config works", func(t *testing.T) {
@@ -92,11 +90,11 @@ func TestNewClient(t *testing.T) {
 		}
 
 		client, err := NewClient(config)
-		require.NoError(t, err)
-		assert.NotNil(t, client)
+		test.RequireNoError(t, err)
+		test.AssertNotNil(t, client)
 
 		// Should use default transport when TLS is nil
-		assert.Nil(t, client.client.Transport)
+		test.AssertNil(t, client.client.Transport)
 	})
 }
 
@@ -123,11 +121,11 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		req.RemoteAddr = "192.168.1.100:12345"
 
 		authReq, err := client.CreateAuthRequest(req)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
-		assert.Equal(t, http.MethodGet, authReq.Method)
-		assert.Equal(t, "http://auth.example.com", authReq.URL.String())
-		assert.Equal(t, req.Context(), authReq.Context())
+		test.AssertEqual(t, http.MethodGet, authReq.Method)
+		test.AssertEqual(t, "http://auth.example.com", authReq.URL.String())
+		test.AssertEqual(t, req.Context(), authReq.Context())
 	})
 
 	t.Run("preserves request method when configured", func(t *testing.T) {
@@ -137,9 +135,9 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		req := httptest.NewRequest("POST", "http://example.com/api/test", nil)
 
 		authReq, err := client.CreateAuthRequest(req)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
-		assert.Equal(t, "POST", authReq.Method)
+		test.AssertEqual(t, "POST", authReq.Method)
 	})
 
 	t.Run("sets forwarded headers correctly", func(t *testing.T) {
@@ -148,13 +146,13 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer token123")
 
 		authReq, err := client.CreateAuthRequest(req)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
-		assert.Equal(t, "192.168.1.100", authReq.Header.Get("X-Forwarded-For"))
-		assert.Equal(t, "POST", authReq.Header.Get("X-Forwarded-Method"))
-		assert.Equal(t, "http", authReq.Header.Get("X-Forwarded-Proto"))
-		assert.Equal(t, "example.com:8080", authReq.Header.Get("X-Forwarded-Host"))
-		assert.Equal(t, "http://example.com:8080/api/test?param=value", authReq.Header.Get("X-Forwarded-Uri"))
+		test.AssertEqual(t, "192.168.1.100", authReq.Header.Get("X-Forwarded-For"))
+		test.AssertEqual(t, "POST", authReq.Header.Get("X-Forwarded-Method"))
+		test.AssertEqual(t, "http", authReq.Header.Get("X-Forwarded-Proto"))
+		test.AssertEqual(t, "example.com:8080", authReq.Header.Get("X-Forwarded-Host"))
+		test.AssertEqual(t, "http://example.com:8080/api/test?param=value", authReq.Header.Get("X-Forwarded-Uri"))
 	})
 
 	t.Run("handles HTTPS requests", func(t *testing.T) {
@@ -163,9 +161,9 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		req.TLS = &tls.ConnectionState{} // Simulate TLS connection
 
 		authReq, err := client.CreateAuthRequest(req)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
-		assert.Equal(t, "https", authReq.Header.Get("X-Forwarded-Proto"))
+		test.AssertEqual(t, "https", authReq.Header.Get("X-Forwarded-Proto"))
 	})
 
 	t.Run("trusts existing forward headers when configured", func(t *testing.T) {
@@ -181,13 +179,13 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		req.Header.Set("X-Forwarded-Uri", "/original/path")
 
 		authReq, err := client.CreateAuthRequest(req)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
-		assert.Equal(t, "203.0.113.1", authReq.Header.Get("X-Forwarded-For"))
-		assert.Equal(t, "PUT", authReq.Header.Get("X-Forwarded-Method"))
-		assert.Equal(t, "https", authReq.Header.Get("X-Forwarded-Proto"))
-		assert.Equal(t, "original.example.com", authReq.Header.Get("X-Forwarded-Host"))
-		assert.Equal(t, "/original/path", authReq.Header.Get("X-Forwarded-Uri"))
+		test.AssertEqual(t, "203.0.113.1", authReq.Header.Get("X-Forwarded-For"))
+		test.AssertEqual(t, "PUT", authReq.Header.Get("X-Forwarded-Method"))
+		test.AssertEqual(t, "https", authReq.Header.Get("X-Forwarded-Proto"))
+		test.AssertEqual(t, "original.example.com", authReq.Header.Get("X-Forwarded-Host"))
+		test.AssertEqual(t, "/original/path", authReq.Header.Get("X-Forwarded-Uri"))
 	})
 
 	t.Run("sets absolute URL header when configured", func(t *testing.T) {
@@ -202,13 +200,13 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		req.TLS = &tls.ConnectionState{}
 
 		authReq, err := client.CreateAuthRequest(req)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		// The actual URL construction builds from scheme, host, and path
 		actualURL := authReq.Header.Get("X-Forwarded-Full-Url")
-		assert.Contains(t, actualURL, "https://")
-		assert.Contains(t, actualURL, "example.com:8080")
-		assert.Contains(t, actualURL, "api/test")
+		test.AssertContains(t, actualURL, "https://")
+		test.AssertContains(t, actualURL, "example.com:8080")
+		test.AssertContains(t, actualURL, "api/test")
 	})
 
 	t.Run("handles empty remote address", func(t *testing.T) {
@@ -216,10 +214,10 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		req.RemoteAddr = ""
 
 		authReq, err := client.CreateAuthRequest(req)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		// Should not set For header if RemoteAddr is empty
-		assert.Equal(t, "", authReq.Header.Get("X-Forwarded-For"))
+		test.AssertEqual(t, "", authReq.Header.Get("X-Forwarded-For"))
 	})
 
 	t.Run("handles malformed remote address", func(t *testing.T) {
@@ -227,10 +225,10 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		req.RemoteAddr = "malformed-address"
 
 		authReq, err := client.CreateAuthRequest(req)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		// Should not set For header if RemoteAddr is malformed
-		assert.Equal(t, "", authReq.Header.Get("X-Forwarded-For"))
+		test.AssertEqual(t, "", authReq.Header.Get("X-Forwarded-For"))
 	})
 
 	t.Run("copies specified request headers", func(t *testing.T) {
@@ -243,11 +241,11 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		authReq, err := client.CreateAuthRequest(req)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
-		assert.Equal(t, "Bearer token123", authReq.Header.Get("Authorization"))
-		assert.Equal(t, "key456", authReq.Header.Get("X-API-Key"))
-		assert.Equal(t, "", authReq.Header.Get("Content-Type"))
+		test.AssertEqual(t, "Bearer token123", authReq.Header.Get("Authorization"))
+		test.AssertEqual(t, "key456", authReq.Header.Get("X-API-Key"))
+		test.AssertEqual(t, "", authReq.Header.Get("Content-Type"))
 	})
 
 	t.Run("copies headers matching regex", func(t *testing.T) {
@@ -261,11 +259,11 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		req.Header.Set("X-Other", "other")
 
 		authReq, err := client.CreateAuthRequest(req)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
-		assert.Equal(t, "custom1", authReq.Header.Get("X-Custom-Header"))
-		assert.Equal(t, "custom2", authReq.Header.Get("X-Custom-Other"))
-		assert.Equal(t, "", authReq.Header.Get("X-Other"))
+		test.AssertEqual(t, "custom1", authReq.Header.Get("X-Custom-Header"))
+		test.AssertEqual(t, "custom2", authReq.Header.Get("X-Custom-Other"))
+		test.AssertEqual(t, "", authReq.Header.Get("X-Other"))
 	})
 
 	t.Run("copies specified cookies", func(t *testing.T) {
@@ -278,7 +276,7 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		req.AddCookie(&http.Cookie{Name: "other", Value: "skip"})
 
 		authReq, err := client.CreateAuthRequest(req)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		cookies := authReq.Cookies()
 		cookieMap := make(map[string]string)
@@ -286,9 +284,9 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 			cookieMap[cookie.Name] = cookie.Value
 		}
 
-		assert.Equal(t, "abc123", cookieMap["session"])
-		assert.Equal(t, "token456", cookieMap["csrf"])
-		assert.Equal(t, "", cookieMap["other"])
+		test.AssertEqual(t, "abc123", cookieMap["session"])
+		test.AssertEqual(t, "token456", cookieMap["csrf"])
+		test.AssertEqual(t, "", cookieMap["other"])
 	})
 
 	t.Run("forwards body when configured", func(t *testing.T) {
@@ -299,18 +297,18 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		req := httptest.NewRequest("POST", "http://example.com/test", strings.NewReader(body))
 
 		authReq, err := client.CreateAuthRequest(req)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		// In httptest.NewRequest, the body may not be properly readable
 		// due to how the test infrastructure sets up the ReadCloser
 		// Let's check what actually happens and adjust expectations
 		if authReq.Body != nil {
 			authBody, err := io.ReadAll(authReq.Body)
-			require.NoError(t, err)
+			test.RequireNoError(t, err)
 
 			// If the body was successfully forwarded, verify it
 			if len(authBody) > 0 {
-				assert.Equal(t, body, string(authBody), "Auth request body should match original")
+				test.AssertEqual(t, body, string(authBody), "Auth request body should match original")
 			} else {
 				t.Log("Body forwarding resulted in empty body - this can happen due to body reader limitations in tests")
 			}
@@ -319,12 +317,12 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		}
 
 		// Check original request body is still accessible
-		require.NotNil(t, req.Body)
+		test.RequireNotNil(t, req.Body)
 		origBody, err := io.ReadAll(req.Body)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		// The original body should be restored regardless
-		assert.Equal(t, body, string(origBody), "Original request body should still be readable")
+		test.AssertEqual(t, body, string(origBody), "Original request body should still be readable")
 	})
 
 	t.Run("truncates body when max size is set", func(t *testing.T) {
@@ -339,17 +337,17 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		req := httptest.NewRequest("POST", "http://example.com/test", strings.NewReader(body))
 
 		authReq, err := client.CreateAuthRequest(req)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		// Check auth request body is truncated
 		authBody, err := io.ReadAll(authReq.Body)
-		require.NoError(t, err)
-		assert.Equal(t, "this ", string(authBody))
+		test.RequireNoError(t, err)
+		test.AssertEqual(t, "this ", string(authBody))
 
 		// Check original request body is still complete
 		origBody, err := io.ReadAll(req.Body)
-		require.NoError(t, err)
-		assert.Equal(t, body, string(origBody))
+		test.RequireNoError(t, err)
+		test.AssertEqual(t, body, string(origBody))
 	})
 
 	t.Run("handles nil body", func(t *testing.T) {
@@ -359,10 +357,10 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 
 		authReq, err := client.CreateAuthRequest(req)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		// When ForwardBody is true but request has no body, an empty body is still created
-		assert.NotNil(t, authReq.Body)
+		test.AssertNotNil(t, authReq.Body)
 	})
 }
 
@@ -383,21 +381,21 @@ func TestClient_Do(t *testing.T) {
 		}
 
 		client, err := NewClient(config)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		req, err := http.NewRequest(http.MethodGet, server.URL, nil)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		resp, err := client.Do(req)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 		defer func() { _ = resp.Body.Close() }()
 
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, "response", resp.Header.Get("X-Test"))
+		test.AssertEqual(t, http.StatusOK, resp.StatusCode)
+		test.AssertEqual(t, "response", resp.Header.Get("X-Test"))
 
 		body, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, "test response", string(body))
+		test.RequireNoError(t, err)
+		test.AssertEqual(t, "test response", string(body))
 	})
 
 	t.Run("handles server error", func(t *testing.T) {
@@ -415,16 +413,16 @@ func TestClient_Do(t *testing.T) {
 		}
 
 		client, err := NewClient(config)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		req, err := http.NewRequest(http.MethodGet, server.URL, nil)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		resp, err := client.Do(req)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 		defer func() { _ = resp.Body.Close() }()
 
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		test.AssertEqual(t, http.StatusInternalServerError, resp.StatusCode)
 	})
 
 	t.Run("handles network error", func(t *testing.T) {
@@ -435,14 +433,14 @@ func TestClient_Do(t *testing.T) {
 		}
 
 		client, err := NewClient(config)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		req, err := http.NewRequest(http.MethodGet, "http://nonexistent.example.com:99999", nil)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		resp, err := client.Do(req)
-		assert.Error(t, err)
-		assert.Nil(t, resp)
+		test.AssertError(t, err)
+		test.AssertNil(t, resp)
 	})
 }
 
@@ -462,9 +460,9 @@ func TestClient_CreateAuthRequest_ErrorCases(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 
 		authReq, err := client.CreateAuthRequest(req)
-		assert.Error(t, err)
-		assert.Nil(t, authReq)
-		assert.Contains(t, err.Error(), "error creating auth request")
+		test.AssertError(t, err)
+		test.AssertNil(t, authReq)
+		test.AssertContains(t, err.Error(), "error creating auth request")
 	})
 
 	t.Run("context cancellation", func(t *testing.T) {
@@ -488,11 +486,11 @@ func TestClient_CreateAuthRequest_ErrorCases(t *testing.T) {
 		cancel() // Cancel immediately
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/test", nil)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		authReq, err := client.CreateAuthRequest(req)
-		require.NoError(t, err)                 // Creating request succeeds
-		assert.Equal(t, ctx, authReq.Context()) // But context is cancelled
+		test.RequireNoError(t, err)                 // Creating request succeeds
+		test.AssertEqual(t, ctx, authReq.Context()) // But context is cancelled
 	})
 }
 

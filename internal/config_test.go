@@ -4,9 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal"
+	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal/test"
 )
 
 func TestParseConfig(t *testing.T) {
@@ -16,21 +15,21 @@ func TestParseConfig(t *testing.T) {
 		}
 
 		parsed, err := internal.ParseConfig(config)
-		require.NoError(t, err)
-		assert.NotNil(t, parsed)
+		test.RequireNoError(t, err)
+		test.AssertNotNil(t, parsed)
 
 		// Check default header prefix
-		assert.Equal(t, "X-Forwarded", parsed.HeaderPrefix)
-		assert.Equal(t, "X-Forwarded-For", parsed.AuthRequestForHeader)
-		assert.Equal(t, "X-Forwarded-Method", parsed.AuthRequestMethodHeader)
-		assert.Equal(t, "X-Forwarded-Proto", parsed.AuthRequestProtoHeader)
-		assert.Equal(t, "X-Forwarded-Host", parsed.AuthRequestHostHeader)
-		assert.Equal(t, "X-Forwarded-Uri", parsed.AuthRequestUriHeader)
-		assert.Equal(t, "", parsed.AuthRequestAbsoluteUrlHeader)
+		test.AssertEqual(t, "X-Forwarded", parsed.HeaderPrefix)
+		test.AssertEqual(t, "X-Forwarded-For", parsed.AuthRequestForHeader)
+		test.AssertEqual(t, "X-Forwarded-Method", parsed.AuthRequestMethodHeader)
+		test.AssertEqual(t, "X-Forwarded-Proto", parsed.AuthRequestProtoHeader)
+		test.AssertEqual(t, "X-Forwarded-Host", parsed.AuthRequestHostHeader)
+		test.AssertEqual(t, "X-Forwarded-Uri", parsed.AuthRequestUriHeader)
+		test.AssertEqual(t, "", parsed.AuthRequestAbsoluteUrlHeader)
 
 		// Check nil regex patterns
-		assert.Nil(t, parsed.AuthRequestHeadersRegex)
-		assert.Nil(t, parsed.AuthResponseHeadersRegex)
+		test.AssertNil(t, parsed.AuthRequestHeadersRegex)
+		test.AssertNil(t, parsed.AuthResponseHeadersRegex)
 	})
 
 	t.Run("custom header prefix", func(t *testing.T) {
@@ -40,14 +39,14 @@ func TestParseConfig(t *testing.T) {
 		}
 
 		parsed, err := internal.ParseConfig(config)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
-		assert.Equal(t, "X-Original", parsed.HeaderPrefix)
-		assert.Equal(t, "X-Original-For", parsed.AuthRequestForHeader)
-		assert.Equal(t, "X-Original-Method", parsed.AuthRequestMethodHeader)
-		assert.Equal(t, "X-Original-Proto", parsed.AuthRequestProtoHeader)
-		assert.Equal(t, "X-Original-Host", parsed.AuthRequestHostHeader)
-		assert.Equal(t, "X-Original-Uri", parsed.AuthRequestUriHeader)
+		test.AssertEqual(t, "X-Original", parsed.HeaderPrefix)
+		test.AssertEqual(t, "X-Original-For", parsed.AuthRequestForHeader)
+		test.AssertEqual(t, "X-Original-Method", parsed.AuthRequestMethodHeader)
+		test.AssertEqual(t, "X-Original-Proto", parsed.AuthRequestProtoHeader)
+		test.AssertEqual(t, "X-Original-Host", parsed.AuthRequestHostHeader)
+		test.AssertEqual(t, "X-Original-Uri", parsed.AuthRequestUriHeader)
 	})
 
 	t.Run("header prefix with trailing dash", func(t *testing.T) {
@@ -57,10 +56,10 @@ func TestParseConfig(t *testing.T) {
 		}
 
 		parsed, err := internal.ParseConfig(config)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
-		assert.Equal(t, "X-Custom", parsed.HeaderPrefix)
-		assert.Equal(t, "X-Custom-For", parsed.AuthRequestForHeader)
+		test.AssertEqual(t, "X-Custom", parsed.HeaderPrefix)
+		test.AssertEqual(t, "X-Custom-For", parsed.AuthRequestForHeader)
 	})
 
 	t.Run("header prefix with only dash", func(t *testing.T) {
@@ -70,11 +69,11 @@ func TestParseConfig(t *testing.T) {
 		}
 
 		parsed, err := internal.ParseConfig(config)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		// Should default back to X-Forwarded
-		assert.Equal(t, "X-Forwarded", parsed.HeaderPrefix)
-		assert.Equal(t, "X-Forwarded-For", parsed.AuthRequestForHeader)
+		test.AssertEqual(t, "X-Forwarded", parsed.HeaderPrefix)
+		test.AssertEqual(t, "X-Forwarded-For", parsed.AuthRequestForHeader)
 	})
 
 	t.Run("with absolute URL header", func(t *testing.T) {
@@ -85,9 +84,9 @@ func TestParseConfig(t *testing.T) {
 		}
 
 		parsed, err := internal.ParseConfig(config)
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
-		assert.Equal(t, "X-Custom-Url", parsed.AuthRequestAbsoluteUrlHeader)
+		test.AssertEqual(t, "X-Custom-Url", parsed.AuthRequestAbsoluteUrlHeader)
 	})
 
 	t.Run("valid auth request headers regex", func(t *testing.T) {
@@ -97,12 +96,12 @@ func TestParseConfig(t *testing.T) {
 		}
 
 		parsed, err := internal.ParseConfig(config)
-		require.NoError(t, err)
-		require.NotNil(t, parsed.AuthRequestHeadersRegex)
+		test.RequireNoError(t, err)
+		test.RequireNotNil(t, parsed.AuthRequestHeadersRegex)
 
 		// Test the regex works
-		assert.True(t, parsed.AuthRequestHeadersRegex.MatchString("X-Custom-Header"))
-		assert.False(t, parsed.AuthRequestHeadersRegex.MatchString("Y-Other-Header"))
+		test.AssertTrue(t, parsed.AuthRequestHeadersRegex.MatchString("X-Custom-Header"))
+		test.AssertFalse(t, parsed.AuthRequestHeadersRegex.MatchString("Y-Other-Header"))
 	})
 
 	t.Run("case insensitive auth request regex", func(t *testing.T) {
@@ -112,13 +111,13 @@ func TestParseConfig(t *testing.T) {
 		}
 
 		parsed, err := internal.ParseConfig(config)
-		require.NoError(t, err)
-		require.NotNil(t, parsed.AuthRequestHeadersRegex)
+		test.RequireNoError(t, err)
+		test.RequireNotNil(t, parsed.AuthRequestHeadersRegex)
 
 		// Should match both cases due to (?i) flag
-		assert.True(t, parsed.AuthRequestHeadersRegex.MatchString("Authorization"))
-		assert.True(t, parsed.AuthRequestHeadersRegex.MatchString("authorization"))
-		assert.True(t, parsed.AuthRequestHeadersRegex.MatchString("AUTHORIZATION"))
+		test.AssertTrue(t, parsed.AuthRequestHeadersRegex.MatchString("Authorization"))
+		test.AssertTrue(t, parsed.AuthRequestHeadersRegex.MatchString("authorization"))
+		test.AssertTrue(t, parsed.AuthRequestHeadersRegex.MatchString("AUTHORIZATION"))
 	})
 
 	t.Run("valid auth response headers regex", func(t *testing.T) {
@@ -128,12 +127,12 @@ func TestParseConfig(t *testing.T) {
 		}
 
 		parsed, err := internal.ParseConfig(config)
-		require.NoError(t, err)
-		require.NotNil(t, parsed.AuthResponseHeadersRegex)
+		test.RequireNoError(t, err)
+		test.RequireNotNil(t, parsed.AuthResponseHeadersRegex)
 
 		// Test the regex works
-		assert.True(t, parsed.AuthResponseHeadersRegex.MatchString("X-Auth-User"))
-		assert.False(t, parsed.AuthResponseHeadersRegex.MatchString("X-Other-Header"))
+		test.AssertTrue(t, parsed.AuthResponseHeadersRegex.MatchString("X-Auth-User"))
+		test.AssertFalse(t, parsed.AuthResponseHeadersRegex.MatchString("X-Other-Header"))
 	})
 
 	t.Run("case insensitive auth response regex", func(t *testing.T) {
@@ -143,13 +142,13 @@ func TestParseConfig(t *testing.T) {
 		}
 
 		parsed, err := internal.ParseConfig(config)
-		require.NoError(t, err)
-		require.NotNil(t, parsed.AuthResponseHeadersRegex)
+		test.RequireNoError(t, err)
+		test.RequireNotNil(t, parsed.AuthResponseHeadersRegex)
 
 		// Should match both cases due to (?i) flag
-		assert.True(t, parsed.AuthResponseHeadersRegex.MatchString("X-Auth-User"))
-		assert.True(t, parsed.AuthResponseHeadersRegex.MatchString("x-auth-user"))
-		assert.True(t, parsed.AuthResponseHeadersRegex.MatchString("X-AUTH-USER"))
+		test.AssertTrue(t, parsed.AuthResponseHeadersRegex.MatchString("X-Auth-User"))
+		test.AssertTrue(t, parsed.AuthResponseHeadersRegex.MatchString("x-auth-user"))
+		test.AssertTrue(t, parsed.AuthResponseHeadersRegex.MatchString("X-AUTH-USER"))
 	})
 }
 
@@ -160,9 +159,9 @@ func TestParseConfig_ErrorCases(t *testing.T) {
 		}
 
 		parsed, err := internal.ParseConfig(config)
-		assert.Error(t, err)
-		assert.Nil(t, parsed)
-		assert.Contains(t, err.Error(), "address cannot be empty")
+		test.AssertError(t, err)
+		test.AssertNil(t, parsed)
+		test.AssertContains(t, err.Error(), "address cannot be empty")
 	})
 
 	t.Run("invalid auth request headers regex", func(t *testing.T) {
@@ -172,9 +171,9 @@ func TestParseConfig_ErrorCases(t *testing.T) {
 		}
 
 		parsed, err := internal.ParseConfig(config)
-		assert.Error(t, err)
-		assert.Nil(t, parsed)
-		assert.Contains(t, err.Error(), "error compiling auth request headers regex")
+		test.AssertError(t, err)
+		test.AssertNil(t, parsed)
+		test.AssertContains(t, err.Error(), "error compiling auth request headers regex")
 	})
 
 	t.Run("invalid auth response headers regex", func(t *testing.T) {
@@ -184,9 +183,9 @@ func TestParseConfig_ErrorCases(t *testing.T) {
 		}
 
 		parsed, err := internal.ParseConfig(config)
-		assert.Error(t, err)
-		assert.Nil(t, parsed)
-		assert.Contains(t, err.Error(), "error compiling auth response headers regex")
+		test.AssertError(t, err)
+		test.AssertNil(t, parsed)
+		test.AssertContains(t, err.Error(), "error compiling auth response headers regex")
 	})
 }
 
@@ -225,16 +224,16 @@ func TestParseConfig_ComplexRegexPatterns(t *testing.T) {
 			}
 
 			parsed, err := internal.ParseConfig(config)
-			require.NoError(t, err)
-			require.NotNil(t, parsed.AuthRequestHeadersRegex)
+			test.RequireNoError(t, err)
+			test.RequireNotNil(t, parsed.AuthRequestHeadersRegex)
 
 			for _, match := range tt.matches {
-				assert.True(t, parsed.AuthRequestHeadersRegex.MatchString(match),
+				test.AssertTrue(t, parsed.AuthRequestHeadersRegex.MatchString(match),
 					"Pattern should match: %s", match)
 			}
 
 			for _, nonMatch := range tt.nonMatches {
-				assert.False(t, parsed.AuthRequestHeadersRegex.MatchString(nonMatch),
+				test.AssertFalse(t, parsed.AuthRequestHeadersRegex.MatchString(nonMatch),
 					"Pattern should not match: %s", nonMatch)
 			}
 		})
@@ -269,41 +268,41 @@ func TestParseConfig_FullConfiguration(t *testing.T) {
 	}
 
 	parsed, err := internal.ParseConfig(config)
-	require.NoError(t, err)
-	require.NotNil(t, parsed)
+	test.RequireNoError(t, err)
+	test.RequireNotNil(t, parsed)
 
 	// Verify all original config is preserved
-	assert.Equal(t, config.Address, parsed.Address)
-	assert.Equal(t, config.Timeout, parsed.Timeout)
-	assert.Equal(t, config.TrustForwardHeader, parsed.TrustForwardHeader)
-	assert.Equal(t, config.PreserveRequestMethod, parsed.PreserveRequestMethod)
-	assert.Equal(t, config.PreserveLocationHeader, parsed.PreserveLocationHeader)
-	assert.Equal(t, config.ForwardBody, parsed.ForwardBody)
-	assert.Equal(t, config.MaxBodySize, parsed.MaxBodySize)
-	assert.Equal(t, config.AuthRequestHeaders, parsed.AuthRequestHeaders)
-	assert.Equal(t, config.AuthRequestCookies, parsed.AuthRequestCookies)
-	assert.Equal(t, config.AuthResponseHeaders, parsed.AuthResponseHeaders)
-	assert.Equal(t, config.AddAuthCookiesToResponse, parsed.AddAuthCookiesToResponse)
-	assert.Equal(t, config.TLS, parsed.TLS)
+	test.AssertEqual(t, config.Address, parsed.Address)
+	test.AssertEqual(t, config.Timeout, parsed.Timeout)
+	test.AssertEqual(t, config.TrustForwardHeader, parsed.TrustForwardHeader)
+	test.AssertEqual(t, config.PreserveRequestMethod, parsed.PreserveRequestMethod)
+	test.AssertEqual(t, config.PreserveLocationHeader, parsed.PreserveLocationHeader)
+	test.AssertEqual(t, config.ForwardBody, parsed.ForwardBody)
+	test.AssertEqual(t, config.MaxBodySize, parsed.MaxBodySize)
+	test.AssertEqual(t, config.AuthRequestHeaders, parsed.AuthRequestHeaders)
+	test.AssertEqual(t, config.AuthRequestCookies, parsed.AuthRequestCookies)
+	test.AssertEqual(t, config.AuthResponseHeaders, parsed.AuthResponseHeaders)
+	test.AssertEqual(t, config.AddAuthCookiesToResponse, parsed.AddAuthCookiesToResponse)
+	test.AssertEqual(t, config.TLS, parsed.TLS)
 
 	// Verify computed headers
-	assert.Equal(t, "X-Custom", parsed.HeaderPrefix)
-	assert.Equal(t, "X-Custom-For", parsed.AuthRequestForHeader)
-	assert.Equal(t, "X-Custom-Method", parsed.AuthRequestMethodHeader)
-	assert.Equal(t, "X-Custom-Proto", parsed.AuthRequestProtoHeader)
-	assert.Equal(t, "X-Custom-Host", parsed.AuthRequestHostHeader)
-	assert.Equal(t, "X-Custom-Uri", parsed.AuthRequestUriHeader)
-	assert.Equal(t, "X-Custom-Full-Url", parsed.AuthRequestAbsoluteUrlHeader)
+	test.AssertEqual(t, "X-Custom", parsed.HeaderPrefix)
+	test.AssertEqual(t, "X-Custom-For", parsed.AuthRequestForHeader)
+	test.AssertEqual(t, "X-Custom-Method", parsed.AuthRequestMethodHeader)
+	test.AssertEqual(t, "X-Custom-Proto", parsed.AuthRequestProtoHeader)
+	test.AssertEqual(t, "X-Custom-Host", parsed.AuthRequestHostHeader)
+	test.AssertEqual(t, "X-Custom-Uri", parsed.AuthRequestUriHeader)
+	test.AssertEqual(t, "X-Custom-Full-Url", parsed.AuthRequestAbsoluteUrlHeader)
 
 	// Verify compiled regexes
-	require.NotNil(t, parsed.AuthRequestHeadersRegex)
-	require.NotNil(t, parsed.AuthResponseHeadersRegex)
+	test.RequireNotNil(t, parsed.AuthRequestHeadersRegex)
+	test.RequireNotNil(t, parsed.AuthResponseHeadersRegex)
 
-	assert.True(t, parsed.AuthRequestHeadersRegex.MatchString("X-Custom-Header"))
-	assert.False(t, parsed.AuthRequestHeadersRegex.MatchString("X-Other-Header"))
+	test.AssertTrue(t, parsed.AuthRequestHeadersRegex.MatchString("X-Custom-Header"))
+	test.AssertFalse(t, parsed.AuthRequestHeadersRegex.MatchString("X-Other-Header"))
 
-	assert.True(t, parsed.AuthResponseHeadersRegex.MatchString("X-Auth-User"))
-	assert.False(t, parsed.AuthResponseHeadersRegex.MatchString("X-Other-User"))
+	test.AssertTrue(t, parsed.AuthResponseHeadersRegex.MatchString("X-Auth-User"))
+	test.AssertFalse(t, parsed.AuthResponseHeadersRegex.MatchString("X-Other-User"))
 }
 
 func TestParseConfig_TLS(t *testing.T) {
@@ -314,12 +313,12 @@ func TestParseConfig_TLS(t *testing.T) {
 		}
 
 		parsed, err := internal.ParseConfig(config)
-		require.NoError(t, err)
-		require.NotNil(t, parsed.TLS)
+		test.RequireNoError(t, err)
+		test.RequireNotNil(t, parsed.TLS)
 
-		assert.Equal(t, uint16(12), parsed.TLS.MinVersion)
-		assert.Equal(t, uint16(13), parsed.TLS.MaxVersion)
-		assert.True(t, parsed.TLS.InsecureSkipVerify)
+		test.AssertEqual(t, uint16(12), parsed.TLS.MinVersion)
+		test.AssertEqual(t, uint16(13), parsed.TLS.MaxVersion)
+		test.AssertTrue(t, parsed.TLS.InsecureSkipVerify)
 	})
 
 	t.Run("partial TLS config fills in defaults", func(t *testing.T) {
@@ -333,13 +332,13 @@ func TestParseConfig_TLS(t *testing.T) {
 		}
 
 		parsed, err := internal.ParseConfig(config)
-		require.NoError(t, err)
-		require.NotNil(t, parsed.TLS)
+		test.RequireNoError(t, err)
+		test.RequireNotNil(t, parsed.TLS)
 
-		assert.Equal(t, "/path/to/ca.pem", parsed.TLS.CA)
-		assert.Equal(t, "/path/to/cert.pem", parsed.TLS.Cert)
-		assert.Equal(t, uint16(12), parsed.TLS.MinVersion) // Default
-		assert.Equal(t, uint16(13), parsed.TLS.MaxVersion) // Default
+		test.AssertEqual(t, "/path/to/ca.pem", parsed.TLS.CA)
+		test.AssertEqual(t, "/path/to/cert.pem", parsed.TLS.Cert)
+		test.AssertEqual(t, uint16(12), parsed.TLS.MinVersion) // Default
+		test.AssertEqual(t, uint16(13), parsed.TLS.MaxVersion) // Default
 	})
 
 	t.Run("TLS version validation - valid range", func(t *testing.T) {
@@ -365,9 +364,9 @@ func TestParseConfig_TLS(t *testing.T) {
 				}
 
 				parsed, err := internal.ParseConfig(config)
-				require.NoError(t, err)
-				assert.Equal(t, tc.minVersion, parsed.TLS.MinVersion)
-				assert.Equal(t, tc.maxVersion, parsed.TLS.MaxVersion)
+				test.RequireNoError(t, err)
+				test.AssertEqual(t, tc.minVersion, parsed.TLS.MinVersion)
+				test.AssertEqual(t, tc.maxVersion, parsed.TLS.MaxVersion)
 			})
 		}
 	})
@@ -397,9 +396,9 @@ func TestParseConfig_TLS(t *testing.T) {
 				}
 
 				parsed, err := internal.ParseConfig(config)
-				assert.Error(t, err)
-				assert.Nil(t, parsed)
-				assert.Contains(t, err.Error(), tc.errorMsg)
+				test.AssertError(t, err)
+				test.AssertNil(t, parsed)
+				test.AssertContains(t, err.Error(), tc.errorMsg)
 			})
 		}
 	})

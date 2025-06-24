@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal/httputil"
+	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal/test"
 )
 
 func TestCopyHeaders(t *testing.T) {
@@ -22,10 +22,10 @@ func TestCopyHeaders(t *testing.T) {
 		filter := []string{"Authorization", "X-API-Key"}
 		httputil.CopyHeaders(srcHeaders, dstHeaders, filter)
 
-		assert.Equal(t, "Bearer token123", dstHeaders.Get("Authorization"))
-		assert.Equal(t, "key456", dstHeaders.Get("X-API-Key"))
-		assert.Equal(t, "", dstHeaders.Get("Content-Type"))
-		assert.Equal(t, "", dstHeaders.Get("X-Custom"))
+		test.AssertEqual(t, "Bearer token123", dstHeaders.Get("Authorization"))
+		test.AssertEqual(t, "key456", dstHeaders.Get("X-API-Key"))
+		test.AssertEqual(t, "", dstHeaders.Get("Content-Type"))
+		test.AssertEqual(t, "", dstHeaders.Get("X-Custom"))
 	})
 
 	t.Run("copies multiple values for same header", func(t *testing.T) {
@@ -40,10 +40,10 @@ func TestCopyHeaders(t *testing.T) {
 		httputil.CopyHeaders(srcHeaders, dstHeaders, filter)
 
 		values := dstHeaders.Values("X-Custom")
-		assert.Len(t, values, 3)
-		assert.Contains(t, values, "value1")
-		assert.Contains(t, values, "value2")
-		assert.Contains(t, values, "value3")
+		test.AssertLen(t, values, 3)
+		test.AssertContains(t, values, "value1")
+		test.AssertContains(t, values, "value2")
+		test.AssertContains(t, values, "value3")
 	})
 
 	t.Run("empty filter copies no headers", func(t *testing.T) {
@@ -54,7 +54,7 @@ func TestCopyHeaders(t *testing.T) {
 
 		httputil.CopyHeaders(srcHeaders, dstHeaders, []string{})
 
-		assert.Empty(t, dstHeaders)
+		test.AssertEmpty(t, dstHeaders)
 	})
 
 	t.Run("nil filter copies no headers", func(t *testing.T) {
@@ -65,7 +65,7 @@ func TestCopyHeaders(t *testing.T) {
 
 		httputil.CopyHeaders(srcHeaders, dstHeaders, nil)
 
-		assert.Empty(t, dstHeaders)
+		test.AssertEmpty(t, dstHeaders)
 	})
 
 	t.Run("filter with non-existent headers", func(t *testing.T) {
@@ -77,7 +77,7 @@ func TestCopyHeaders(t *testing.T) {
 		filter := []string{"NonExistent", "AlsoNonExistent"}
 		httputil.CopyHeaders(srcHeaders, dstHeaders, filter)
 
-		assert.Empty(t, dstHeaders)
+		test.AssertEmpty(t, dstHeaders)
 	})
 
 	t.Run("case insensitive header matching", func(t *testing.T) {
@@ -92,8 +92,8 @@ func TestCopyHeaders(t *testing.T) {
 		httputil.CopyHeaders(srcHeaders, dstHeaders, filter)
 
 		// Go's http.Header canonicalizes header names
-		assert.Equal(t, "Bearer token123", dstHeaders.Get("Authorization"))
-		assert.Equal(t, "key456", dstHeaders.Get("X-Api-Key"))
+		test.AssertEqual(t, "Bearer token123", dstHeaders.Get("Authorization"))
+		test.AssertEqual(t, "key456", dstHeaders.Get("X-Api-Key"))
 	})
 
 	t.Run("adds to existing headers in destination", func(t *testing.T) {
@@ -109,12 +109,12 @@ func TestCopyHeaders(t *testing.T) {
 
 		// Should add to existing header, not replace
 		values := dstHeaders.Values("X-Custom")
-		assert.Len(t, values, 2)
-		assert.Contains(t, values, "existing-value")
-		assert.Contains(t, values, "new-value")
+		test.AssertLen(t, values, 2)
+		test.AssertContains(t, values, "existing-value")
+		test.AssertContains(t, values, "new-value")
 
 		// Other headers should remain unchanged
-		assert.Equal(t, "other", dstHeaders.Get("Other-Header"))
+		test.AssertEqual(t, "other", dstHeaders.Get("Other-Header"))
 	})
 }
 
@@ -131,10 +131,10 @@ func TestCopyHeadersRegex(t *testing.T) {
 		regex := regexp.MustCompile("(?i)^X-Auth-.*")
 		httputil.CopyHeadersRegex(srcHeaders, dstHeaders, regex)
 
-		assert.Equal(t, "john", dstHeaders.Get("X-Auth-User"))
-		assert.Equal(t, "admin", dstHeaders.Get("X-Auth-Role"))
-		assert.Equal(t, "", dstHeaders.Get("X-Other-Header"))
-		assert.Equal(t, "", dstHeaders.Get("Authorization"))
+		test.AssertEqual(t, "john", dstHeaders.Get("X-Auth-User"))
+		test.AssertEqual(t, "admin", dstHeaders.Get("X-Auth-Role"))
+		test.AssertEqual(t, "", dstHeaders.Get("X-Other-Header"))
+		test.AssertEqual(t, "", dstHeaders.Get("Authorization"))
 	})
 
 	t.Run("case insensitive regex matching", func(t *testing.T) {
@@ -151,8 +151,8 @@ func TestCopyHeadersRegex(t *testing.T) {
 		// Go canonicalizes header names, so only the last set value is preserved
 		// http.Header.Set() replaces previous values
 		values := dstHeaders.Values("Authorization")
-		assert.Len(t, values, 1)
-		assert.Contains(t, values, "Bearer token3")
+		test.AssertLen(t, values, 1)
+		test.AssertContains(t, values, "Bearer token3")
 	})
 
 	t.Run("nil regex copies no headers", func(t *testing.T) {
@@ -163,7 +163,7 @@ func TestCopyHeadersRegex(t *testing.T) {
 
 		httputil.CopyHeadersRegex(srcHeaders, dstHeaders, nil)
 
-		assert.Empty(t, dstHeaders)
+		test.AssertEmpty(t, dstHeaders)
 	})
 
 	t.Run("regex with no matches copies no headers", func(t *testing.T) {
@@ -176,7 +176,7 @@ func TestCopyHeadersRegex(t *testing.T) {
 		regex := regexp.MustCompile("(?i)^X-NonExistent-.*")
 		httputil.CopyHeadersRegex(srcHeaders, dstHeaders, regex)
 
-		assert.Empty(t, dstHeaders)
+		test.AssertEmpty(t, dstHeaders)
 	})
 
 	t.Run("complex regex patterns", func(t *testing.T) {
@@ -192,10 +192,10 @@ func TestCopyHeadersRegex(t *testing.T) {
 		regex := regexp.MustCompile("(?i)^X-Custom-.*")
 		httputil.CopyHeadersRegex(srcHeaders, dstHeaders, regex)
 
-		assert.Equal(t, "value1", dstHeaders.Get("X-Custom-Header"))
-		assert.Equal(t, "value2", dstHeaders.Get("X-Custom-Other"))
-		assert.Equal(t, "", dstHeaders.Get("Y-Custom-Header"))
-		assert.Equal(t, "", dstHeaders.Get("X-Other-Header"))
+		test.AssertEqual(t, "value1", dstHeaders.Get("X-Custom-Header"))
+		test.AssertEqual(t, "value2", dstHeaders.Get("X-Custom-Other"))
+		test.AssertEqual(t, "", dstHeaders.Get("Y-Custom-Header"))
+		test.AssertEqual(t, "", dstHeaders.Get("X-Other-Header"))
 	})
 
 	t.Run("multiple values per header with regex", func(t *testing.T) {
@@ -210,10 +210,10 @@ func TestCopyHeadersRegex(t *testing.T) {
 		httputil.CopyHeadersRegex(srcHeaders, dstHeaders, regex)
 
 		values := dstHeaders.Values("X-Auth-Token")
-		assert.Len(t, values, 2)
-		assert.Contains(t, values, "token1")
-		assert.Contains(t, values, "token2")
-		assert.Equal(t, "", dstHeaders.Get("X-Other"))
+		test.AssertLen(t, values, 2)
+		test.AssertContains(t, values, "token1")
+		test.AssertContains(t, values, "token2")
+		test.AssertEqual(t, "", dstHeaders.Get("X-Other"))
 	})
 
 	t.Run("adds to existing headers in destination", func(t *testing.T) {
@@ -229,11 +229,11 @@ func TestCopyHeadersRegex(t *testing.T) {
 
 		// Should add to existing header
 		values := dstHeaders.Values("X-Auth-User")
-		assert.Len(t, values, 2)
-		assert.Contains(t, values, "existing-user")
-		assert.Contains(t, values, "new-user")
+		test.AssertLen(t, values, 2)
+		test.AssertContains(t, values, "existing-user")
+		test.AssertContains(t, values, "new-user")
 
 		// Other headers should remain unchanged
-		assert.Equal(t, "other", dstHeaders.Get("Other-Header"))
+		test.AssertEqual(t, "other", dstHeaders.Get("Other-Header"))
 	})
 }

@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal/httputil"
+	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal/test"
 )
 
 func TestCopyCookies(t *testing.T) {
@@ -33,13 +33,13 @@ func TestCopyCookies(t *testing.T) {
 			cookieValues[cookie.Name] = cookie.Value
 		}
 
-		assert.Len(t, cookies, 2)
-		assert.Contains(t, cookieNames, "session")
-		assert.Contains(t, cookieNames, "user")
-		assert.NotContains(t, cookieNames, "csrf")
-		assert.NotContains(t, cookieNames, "other")
-		assert.Equal(t, "abc123", cookieValues["session"])
-		assert.Equal(t, "john", cookieValues["user"])
+		test.AssertLen(t, cookies, 2)
+		test.AssertContains(t, cookieNames, "session")
+		test.AssertContains(t, cookieNames, "user")
+		test.AssertNotContains(t, cookieNames, "csrf")
+		test.AssertNotContains(t, cookieNames, "other")
+		test.AssertEqual(t, "abc123", cookieValues["session"])
+		test.AssertEqual(t, "john", cookieValues["user"])
 	})
 
 	t.Run("empty filter copies no cookies", func(t *testing.T) {
@@ -50,7 +50,7 @@ func TestCopyCookies(t *testing.T) {
 
 		httputil.CopyCookies(srcReq, dstReq, []string{})
 
-		assert.Empty(t, dstReq.Cookies())
+		test.AssertEmpty(t, dstReq.Cookies())
 	})
 
 	t.Run("nil filter copies no cookies", func(t *testing.T) {
@@ -61,7 +61,7 @@ func TestCopyCookies(t *testing.T) {
 
 		httputil.CopyCookies(srcReq, dstReq, nil)
 
-		assert.Empty(t, dstReq.Cookies())
+		test.AssertEmpty(t, dstReq.Cookies())
 	})
 
 	t.Run("filter with non-existent cookie names", func(t *testing.T) {
@@ -73,7 +73,7 @@ func TestCopyCookies(t *testing.T) {
 		filter := []string{"nonexistent", "alsononexistent"}
 		httputil.CopyCookies(srcReq, dstReq, filter)
 
-		assert.Empty(t, dstReq.Cookies())
+		test.AssertEmpty(t, dstReq.Cookies())
 	})
 
 	t.Run("duplicate cookie names in filter", func(t *testing.T) {
@@ -87,9 +87,9 @@ func TestCopyCookies(t *testing.T) {
 
 		// Should only copy once despite multiple entries in filter
 		cookies := dstReq.Cookies()
-		assert.Len(t, cookies, 1)
-		assert.Equal(t, "session", cookies[0].Name)
-		assert.Equal(t, "abc123", cookies[0].Value)
+		test.AssertLen(t, cookies, 1)
+		test.AssertEqual(t, "session", cookies[0].Name)
+		test.AssertEqual(t, "abc123", cookies[0].Value)
 	})
 
 	t.Run("cookies with same name but different attributes", func(t *testing.T) {
@@ -110,15 +110,15 @@ func TestCopyCookies(t *testing.T) {
 		httputil.CopyCookies(srcReq, dstReq, filter)
 
 		cookies := dstReq.Cookies()
-		assert.Len(t, cookies, 1)
+		test.AssertLen(t, cookies, 1)
 		copiedCookie := cookies[0]
-		assert.Equal(t, "session", copiedCookie.Name)
-		assert.Equal(t, "abc123", copiedCookie.Value)
+		test.AssertEqual(t, "session", copiedCookie.Name)
+		test.AssertEqual(t, "abc123", copiedCookie.Value)
 		// Note: Go's AddCookie method only preserves Name and Value
 		// Other attributes are not copied by the CopyCookies function
-		assert.Equal(t, "", copiedCookie.Path)
-		assert.Equal(t, "", copiedCookie.Domain)
-		assert.False(t, copiedCookie.HttpOnly)
-		assert.False(t, copiedCookie.Secure)
+		test.AssertEqual(t, "", copiedCookie.Path)
+		test.AssertEqual(t, "", copiedCookie.Domain)
+		test.AssertFalse(t, copiedCookie.HttpOnly)
+		test.AssertFalse(t, copiedCookie.Secure)
 	})
 }

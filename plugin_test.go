@@ -9,41 +9,40 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	plugin "github.com/xabinapal/traefik-customizable-auth-forward-plugin"
 	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal"
+	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal/test"
 )
 
 func TestCreateConfig(t *testing.T) {
 	config := plugin.CreateConfig()
 
 	// Verify all default values are set correctly
-	assert.Equal(t, "", config.Address)
-	assert.Equal(t, 30*time.Second, config.Timeout)
-	assert.Equal(t, "X-Forwarded", config.HeaderPrefix)
-	assert.False(t, config.PreserveRequestMethod)
-	assert.False(t, config.TrustForwardHeader)
-	assert.False(t, config.PreserveLocationHeader)
-	assert.False(t, config.ForwardBody)
-	assert.Equal(t, int64(-1), config.MaxBodySize)
+	test.AssertEqual(t, "", config.Address)
+	test.AssertEqual(t, 30*time.Second, config.Timeout)
+	test.AssertEqual(t, "X-Forwarded", config.HeaderPrefix)
+	test.AssertFalse(t, config.PreserveRequestMethod)
+	test.AssertFalse(t, config.TrustForwardHeader)
+	test.AssertFalse(t, config.PreserveLocationHeader)
+	test.AssertFalse(t, config.ForwardBody)
+	test.AssertEqual(t, int64(-1), config.MaxBodySize)
 
 	// Verify TLS defaults
-	require.NotNil(t, config.TLS)
-	assert.Equal(t, "", config.TLS.CA)
-	assert.Equal(t, "", config.TLS.Cert)
-	assert.Equal(t, "", config.TLS.Key)
-	assert.False(t, config.TLS.InsecureSkipVerify)
+	test.RequireNotNil(t, config.TLS)
+	test.AssertEqual(t, "", config.TLS.CA)
+	test.AssertEqual(t, "", config.TLS.Cert)
+	test.AssertEqual(t, "", config.TLS.Key)
+	test.AssertFalse(t, config.TLS.InsecureSkipVerify)
 
 	// Verify slice fields are initialized
-	assert.NotNil(t, config.AuthRequestHeaders)
-	assert.NotNil(t, config.AuthRequestCookies)
-	assert.NotNil(t, config.AuthResponseHeaders)
-	assert.NotNil(t, config.AddAuthCookiesToResponse)
-	assert.Empty(t, config.AuthRequestHeaders)
-	assert.Empty(t, config.AuthRequestCookies)
-	assert.Empty(t, config.AuthResponseHeaders)
-	assert.Empty(t, config.AddAuthCookiesToResponse)
+	test.AssertNotNil(t, config.AuthRequestHeaders)
+	test.AssertNotNil(t, config.AuthRequestCookies)
+	test.AssertNotNil(t, config.AuthResponseHeaders)
+	test.AssertNotNil(t, config.AddAuthCookiesToResponse)
+	test.AssertEmpty(t, config.AuthRequestHeaders)
+	test.AssertEmpty(t, config.AuthRequestCookies)
+	test.AssertEmpty(t, config.AuthResponseHeaders)
+	test.AssertEmpty(t, config.AddAuthCookiesToResponse)
 }
 
 func TestNew(t *testing.T) {
@@ -59,8 +58,8 @@ func TestNew(t *testing.T) {
 		}
 
 		handler, err := plugin.New(ctx, next, config, "test-plugin")
-		require.NoError(t, err)
-		assert.NotNil(t, handler)
+		test.RequireNoError(t, err)
+		test.AssertNotNil(t, handler)
 	})
 
 	t.Run("empty address returns error", func(t *testing.T) {
@@ -70,9 +69,9 @@ func TestNew(t *testing.T) {
 		}
 
 		handler, err := plugin.New(ctx, next, config, "test-plugin")
-		assert.Error(t, err)
-		assert.Nil(t, handler)
-		assert.Contains(t, err.Error(), "address cannot be empty")
+		test.AssertError(t, err)
+		test.AssertNil(t, handler)
+		test.AssertContains(t, err.Error(), "address cannot be empty")
 	})
 
 	t.Run("invalid regex returns error", func(t *testing.T) {
@@ -82,9 +81,9 @@ func TestNew(t *testing.T) {
 		}
 
 		handler, err := plugin.New(ctx, next, config, "test-plugin")
-		assert.Error(t, err)
-		assert.Nil(t, handler)
-		assert.Contains(t, err.Error(), "error parsing config")
+		test.AssertError(t, err)
+		test.AssertNil(t, handler)
+		test.AssertContains(t, err.Error(), "error parsing config")
 	})
 }
 
@@ -119,8 +118,8 @@ func TestServeHTTP(t *testing.T) {
 			expectedBody:   "Success from next handler",
 			validateNext: func(t *testing.T, req *http.Request) {
 				t.Helper()
-				assert.Equal(t, "john.doe", req.Header.Get("X-Auth-User"))
-				assert.Equal(t, "john@example.com", req.Header.Get("X-Auth-Email"))
+				test.AssertEqual(t, "john.doe", req.Header.Get("X-Auth-User"))
+				test.AssertEqual(t, "john@example.com", req.Header.Get("X-Auth-Email"))
 			},
 		},
 		{
@@ -225,9 +224,9 @@ func TestServeHTTP(t *testing.T) {
 			expectedBody:   "Success from next handler",
 			validateNext: func(t *testing.T, req *http.Request) {
 				t.Helper()
-				assert.Equal(t, "custom-value", req.Header.Get("X-Custom-Header"))
-				assert.Equal(t, "other-value", req.Header.Get("X-Other-Header"))
-				assert.Equal(t, "", req.Header.Get("Y-Skip-Header"))
+				test.AssertEqual(t, "custom-value", req.Header.Get("X-Custom-Header"))
+				test.AssertEqual(t, "other-value", req.Header.Get("X-Other-Header"))
+				test.AssertEqual(t, "", req.Header.Get("Y-Skip-Header"))
 			},
 		},
 		{
@@ -256,8 +255,8 @@ func TestServeHTTP(t *testing.T) {
 						userFound = true
 					}
 				}
-				assert.True(t, sessionFound, "session cookie should be forwarded")
-				assert.True(t, userFound, "user cookie should be forwarded")
+				test.AssertTrue(t, sessionFound, "session cookie should be forwarded")
+				test.AssertTrue(t, userFound, "user cookie should be forwarded")
 			},
 		},
 	}
@@ -300,7 +299,7 @@ func TestServeHTTP(t *testing.T) {
 
 			// Create plugin
 			handler, err := plugin.New(context.Background(), next, config, "test-plugin")
-			require.NoError(t, err)
+			test.RequireNoError(t, err)
 
 			// Create test request
 			req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
@@ -313,25 +312,25 @@ func TestServeHTTP(t *testing.T) {
 			handler.ServeHTTP(recorder, req)
 
 			// Verify response
-			assert.Equal(t, tt.expectedStatus, recorder.Code)
-			assert.Equal(t, tt.expectedBody, recorder.Body.String())
+			test.AssertEqual(t, tt.expectedStatus, recorder.Code)
+			test.AssertEqual(t, tt.expectedBody, recorder.Body.String())
 
 			// Verify headers
 			for key, value := range tt.expectedHeaders {
 				if value == "DYNAMIC" && key == "Location" {
 					// For dynamic location header, just check it contains /login
 					location := recorder.Header().Get("Location")
-					assert.Contains(t, location, "/login", "Location header should contain /login")
+					test.AssertContains(t, location, "/login", "Location header should contain /login")
 				} else {
-					assert.Equal(t, value, recorder.Header().Get(key))
+					test.AssertEqual(t, value, recorder.Header().Get(key))
 				}
 			}
 
 			// Verify next handler was called appropriately
 			if tt.expectedStatus >= http.StatusOK && tt.expectedStatus < http.StatusMultipleChoices {
-				assert.True(t, nextCalled, "next handler should be called for 2xx auth response")
+				test.AssertTrue(t, nextCalled, "next handler should be called for 2xx auth response")
 			} else {
-				assert.False(t, nextCalled, "next handler should not be called for non-2xx auth response")
+				test.AssertFalse(t, nextCalled, "next handler should not be called for non-2xx auth response")
 			}
 		})
 	}
@@ -347,15 +346,15 @@ func TestServeHTTP_ErrorScenarios(t *testing.T) {
 		})
 
 		handler, err := plugin.New(context.Background(), next, config, "test-plugin")
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 		recorder := httptest.NewRecorder()
 
 		handler.ServeHTTP(recorder, req)
 
-		assert.Equal(t, http.StatusInternalServerError, recorder.Code)
-		assert.Contains(t, recorder.Body.String(), "dial tcp")
+		test.AssertEqual(t, http.StatusInternalServerError, recorder.Code)
+		test.AssertContains(t, recorder.Body.String(), "dial tcp")
 	})
 
 	t.Run("malformed auth service URL", func(t *testing.T) {
@@ -367,15 +366,15 @@ func TestServeHTTP_ErrorScenarios(t *testing.T) {
 		})
 
 		handler, err := plugin.New(context.Background(), next, config, "test-plugin")
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 		recorder := httptest.NewRecorder()
 
 		handler.ServeHTTP(recorder, req)
 
-		assert.Equal(t, http.StatusInternalServerError, recorder.Code)
-		assert.Contains(t, recorder.Body.String(), "error creating auth request")
+		test.AssertEqual(t, http.StatusInternalServerError, recorder.Code)
+		test.AssertContains(t, recorder.Body.String(), "error creating auth request")
 	})
 
 	t.Run("auth service returns invalid location header", func(t *testing.T) {
@@ -395,7 +394,7 @@ func TestServeHTTP_ErrorScenarios(t *testing.T) {
 		})
 
 		handler, err := plugin.New(context.Background(), next, config, "test-plugin")
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 		recorder := httptest.NewRecorder()
@@ -403,7 +402,7 @@ func TestServeHTTP_ErrorScenarios(t *testing.T) {
 		handler.ServeHTTP(recorder, req)
 
 		// Should return 500 error when location parsing fails
-		assert.Equal(t, http.StatusInternalServerError, recorder.Code)
+		test.AssertEqual(t, http.StatusInternalServerError, recorder.Code)
 	})
 }
 
@@ -455,7 +454,7 @@ func TestServeHTTP_RequestHeaders(t *testing.T) {
 			})
 
 			handler, err := plugin.New(context.Background(), next, config, "test-plugin")
-			require.NoError(t, err)
+			test.RequireNoError(t, err)
 
 			req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 			recorder := httptest.NewRecorder()
@@ -464,7 +463,7 @@ func TestServeHTTP_RequestHeaders(t *testing.T) {
 
 			// Verify auth request headers
 			for key, value := range tt.expectedHeaders {
-				assert.Equal(t, value, capturedHeaders.Get(key), "header %s should be set correctly", key)
+				test.AssertEqual(t, value, capturedHeaders.Get(key), "header %s should be set correctly", key)
 			}
 		})
 	}
@@ -532,7 +531,7 @@ func TestServeHTTP_BodyForwarding(t *testing.T) {
 			})
 
 			handler, err := plugin.New(context.Background(), next, config, "test-plugin")
-			require.NoError(t, err)
+			test.RequireNoError(t, err)
 
 			var req *http.Request
 			if tt.requestBody != "" {
@@ -548,19 +547,19 @@ func TestServeHTTP_BodyForwarding(t *testing.T) {
 				if tt.maxBodySize > 0 && int64(len(tt.requestBody)) > tt.maxBodySize {
 					expectedTruncated := tt.requestBody[:tt.maxBodySize]
 					if len(receivedBody) > 0 {
-						assert.Equal(t, expectedTruncated, string(receivedBody), "Body should be truncated to max size")
+						test.AssertEqual(t, expectedTruncated, string(receivedBody), "Body should be truncated to max size")
 					}
 				} else {
 					if len(receivedBody) > 0 {
-						assert.Equal(t, tt.requestBody, string(receivedBody), "Body should be forwarded completely")
+						test.AssertEqual(t, tt.requestBody, string(receivedBody), "Body should be forwarded completely")
 					}
 				}
 			} else if !tt.forwardBody {
 				// When body forwarding is disabled, auth request should have no body or empty body
-				assert.Empty(t, receivedBody, "Body should not be forwarded when disabled")
+				test.AssertEmpty(t, receivedBody, "Body should not be forwarded when disabled")
 			}
 
-			assert.Equal(t, http.StatusOK, recorder.Code)
+			test.AssertEqual(t, http.StatusOK, recorder.Code)
 		})
 	}
 }
@@ -583,15 +582,15 @@ func TestServeHTTP_TimeoutScenarios(t *testing.T) {
 		})
 
 		handler, err := plugin.New(context.Background(), next, config, "test-plugin")
-		require.NoError(t, err)
+		test.RequireNoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 		recorder := httptest.NewRecorder()
 
 		handler.ServeHTTP(recorder, req)
 
-		assert.Equal(t, http.StatusInternalServerError, recorder.Code)
-		assert.Contains(t, recorder.Body.String(), "context deadline exceeded")
+		test.AssertEqual(t, http.StatusInternalServerError, recorder.Code)
+		test.AssertContains(t, recorder.Body.String(), "context deadline exceeded")
 	})
 }
 
@@ -656,7 +655,7 @@ func TestServeHTTP_AdvancedHeaderScenarios(t *testing.T) {
 				})
 
 				handler, err := plugin.New(context.Background(), next, config, "test-plugin")
-				require.NoError(t, err)
+				test.RequireNoError(t, err)
 
 				req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 				req.RemoteAddr = "192.168.1.100:12345"
@@ -674,14 +673,14 @@ func TestServeHTTP_AdvancedHeaderScenarios(t *testing.T) {
 					// When trusting, should use the provided forward headers
 					for key, expectedValue := range tt.expectedForwarded {
 						actualValue := capturedHeaders.Get(key)
-						assert.Equal(t, expectedValue, actualValue, "Header %s should match expected value", key)
+						test.AssertEqual(t, expectedValue, actualValue, "Header %s should match expected value", key)
 					}
 				} else {
 					// When not trusting, should generate new headers from request
-					assert.Equal(t, "192.168.1.100", capturedHeaders.Get("X-Forwarded-For"))
-					assert.Equal(t, "http", capturedHeaders.Get("X-Forwarded-Proto"))
-					assert.Equal(t, "example.com", capturedHeaders.Get("X-Forwarded-Host"))
-					assert.Equal(t, http.MethodGet, capturedHeaders.Get("X-Forwarded-Method"))
+					test.AssertEqual(t, "192.168.1.100", capturedHeaders.Get("X-Forwarded-For"))
+					test.AssertEqual(t, "http", capturedHeaders.Get("X-Forwarded-Proto"))
+					test.AssertEqual(t, "example.com", capturedHeaders.Get("X-Forwarded-Host"))
+					test.AssertEqual(t, http.MethodGet, capturedHeaders.Get("X-Forwarded-Method"))
 				}
 			})
 		}

@@ -6,17 +6,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal/httputil"
+	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal/test"
 )
 
 func TestNewResponseModifier(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	rm := httputil.NewResponseModifier(recorder)
 
-	assert.NotNil(t, rm)
-	assert.Equal(t, recorder, rm.ResponseWriter)
+	test.AssertNotNil(t, rm)
+	test.AssertEqual(t, recorder, rm.ResponseWriter)
 }
 
 func TestResponseModifier_AddCookie(t *testing.T) {
@@ -32,9 +31,9 @@ func TestResponseModifier_AddCookie(t *testing.T) {
 
 		response := recorder.Result()
 		cookies := response.Cookies()
-		require.Len(t, cookies, 1)
-		assert.Equal(t, "session", cookies[0].Name)
-		assert.Equal(t, "abc123", cookies[0].Value)
+		test.RequireLen(t, cookies, 1)
+		test.AssertEqual(t, "session", cookies[0].Name)
+		test.AssertEqual(t, "abc123", cookies[0].Value)
 	})
 
 	t.Run("adds multiple cookies", func(t *testing.T) {
@@ -50,15 +49,15 @@ func TestResponseModifier_AddCookie(t *testing.T) {
 
 		response := recorder.Result()
 		cookies := response.Cookies()
-		require.Len(t, cookies, 2)
+		test.RequireLen(t, cookies, 2)
 
 		cookieMap := make(map[string]string)
 		for _, c := range cookies {
 			cookieMap[c.Name] = c.Value
 		}
 
-		assert.Equal(t, "abc123", cookieMap["session"])
-		assert.Equal(t, "john", cookieMap["user"])
+		test.AssertEqual(t, "abc123", cookieMap["session"])
+		test.AssertEqual(t, "john", cookieMap["user"])
 	})
 
 	t.Run("overwrites cookie with same name", func(t *testing.T) {
@@ -74,9 +73,9 @@ func TestResponseModifier_AddCookie(t *testing.T) {
 
 		response := recorder.Result()
 		cookies := response.Cookies()
-		require.Len(t, cookies, 1)
-		assert.Equal(t, "session", cookies[0].Name)
-		assert.Equal(t, "new", cookies[0].Value)
+		test.RequireLen(t, cookies, 1)
+		test.AssertEqual(t, "session", cookies[0].Name)
+		test.AssertEqual(t, "new", cookies[0].Value)
 	})
 }
 
@@ -89,9 +88,9 @@ func TestResponseModifier_WriteHeader(t *testing.T) {
 		rm := httputil.NewResponseModifier(recorder)
 		rm.WriteHeader(http.StatusCreated)
 
-		assert.Equal(t, http.StatusCreated, recorder.Code)
-		assert.Equal(t, "application/json", recorder.Header().Get("Content-Type"))
-		assert.Equal(t, "value", recorder.Header().Get("X-Custom"))
+		test.AssertEqual(t, http.StatusCreated, recorder.Code)
+		test.AssertEqual(t, "application/json", recorder.Header().Get("Content-Type"))
+		test.AssertEqual(t, "value", recorder.Header().Get("X-Custom"))
 	})
 
 	t.Run("adds cookies to response", func(t *testing.T) {
@@ -109,10 +108,10 @@ func TestResponseModifier_WriteHeader(t *testing.T) {
 		rm.WriteHeader(http.StatusOK)
 
 		setCookieHeaders := recorder.Header().Values("Set-Cookie")
-		require.Len(t, setCookieHeaders, 1)
-		assert.Contains(t, setCookieHeaders[0], "session=abc123")
-		assert.Contains(t, setCookieHeaders[0], "Path=/")
-		assert.Contains(t, setCookieHeaders[0], "HttpOnly")
+		test.RequireLen(t, setCookieHeaders, 1)
+		test.AssertContains(t, setCookieHeaders[0], "session=abc123")
+		test.AssertContains(t, setCookieHeaders[0], "Path=/")
+		test.AssertContains(t, setCookieHeaders[0], "HttpOnly")
 	})
 
 	t.Run("preserves existing Set-Cookie headers", func(t *testing.T) {
@@ -128,12 +127,12 @@ func TestResponseModifier_WriteHeader(t *testing.T) {
 		rm.WriteHeader(http.StatusOK)
 
 		setCookieHeaders := recorder.Header().Values("Set-Cookie")
-		require.Len(t, setCookieHeaders, 3)
+		test.RequireLen(t, setCookieHeaders, 3)
 
 		cookieStrings := strings.Join(setCookieHeaders, "; ")
-		assert.Contains(t, cookieStrings, "existing=cookie1")
-		assert.Contains(t, cookieStrings, "other=cookie2")
-		assert.Contains(t, cookieStrings, "new=cookie3")
+		test.AssertContains(t, cookieStrings, "existing=cookie1")
+		test.AssertContains(t, cookieStrings, "other=cookie2")
+		test.AssertContains(t, cookieStrings, "new=cookie3")
 	})
 
 	t.Run("avoids duplicate cookies", func(t *testing.T) {
@@ -150,9 +149,9 @@ func TestResponseModifier_WriteHeader(t *testing.T) {
 
 		setCookieHeaders := recorder.Header().Values("Set-Cookie")
 		// Should only have the existing cookie, not the duplicate
-		require.Len(t, setCookieHeaders, 1)
-		assert.Contains(t, setCookieHeaders[0], "session=existing")
-		assert.NotContains(t, setCookieHeaders[0], "session=new")
+		test.RequireLen(t, setCookieHeaders, 1)
+		test.AssertContains(t, setCookieHeaders[0], "session=existing")
+		test.AssertNotContains(t, setCookieHeaders[0], "session=new")
 	})
 
 	t.Run("handles malformed existing cookies gracefully", func(t *testing.T) {
@@ -169,11 +168,11 @@ func TestResponseModifier_WriteHeader(t *testing.T) {
 
 		setCookieHeaders := recorder.Header().Values("Set-Cookie")
 		// Should have valid cookie + new cookie (empty cookie filtered out)
-		require.Len(t, setCookieHeaders, 2)
+		test.RequireLen(t, setCookieHeaders, 2)
 
 		cookieStrings := strings.Join(setCookieHeaders, "; ")
-		assert.Contains(t, cookieStrings, "valid=cookie")
-		assert.Contains(t, cookieStrings, "new=value")
+		test.AssertContains(t, cookieStrings, "valid=cookie")
+		test.AssertContains(t, cookieStrings, "new=value")
 	})
 
 	t.Run("handles multiple values in single cookie header", func(t *testing.T) {
@@ -189,11 +188,11 @@ func TestResponseModifier_WriteHeader(t *testing.T) {
 		rm.WriteHeader(http.StatusOK)
 
 		setCookieHeaders := recorder.Header().Values("Set-Cookie")
-		require.Len(t, setCookieHeaders, 2)
+		test.RequireLen(t, setCookieHeaders, 2)
 
 		// The existing malformed cookie should be preserved as-is
-		assert.Contains(t, setCookieHeaders[0], "first=value1; second=value2")
-		assert.Contains(t, setCookieHeaders[1], "third=value3")
+		test.AssertContains(t, setCookieHeaders[0], "first=value1; second=value2")
+		test.AssertContains(t, setCookieHeaders[1], "third=value3")
 	})
 }
 
@@ -205,9 +204,9 @@ func TestResponseModifier_Write(t *testing.T) {
 		data := []byte("test response data")
 		n, err := rm.Write(data)
 
-		require.NoError(t, err)
-		assert.Equal(t, len(data), n)
-		assert.Equal(t, "test response data", recorder.Body.String())
+		test.RequireNoError(t, err)
+		test.AssertEqual(t, len(data), n)
+		test.AssertEqual(t, "test response data", recorder.Body.String())
 	})
 }
 
@@ -220,11 +219,11 @@ func TestResponseModifier_Header(t *testing.T) {
 		rm.Header().Add("X-Custom", "value1")
 		rm.Header().Add("X-Custom", "value2")
 
-		assert.Equal(t, "application/json", recorder.Header().Get("Content-Type"))
+		test.AssertEqual(t, "application/json", recorder.Header().Get("Content-Type"))
 
 		customValues := recorder.Header().Values("X-Custom")
-		assert.Len(t, customValues, 2)
-		assert.Contains(t, customValues, "value1")
-		assert.Contains(t, customValues, "value2")
+		test.AssertLen(t, customValues, 2)
+		test.AssertContains(t, customValues, "value1")
+		test.AssertContains(t, customValues, "value2")
 	})
 }
