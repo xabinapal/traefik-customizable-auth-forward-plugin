@@ -40,10 +40,10 @@ func TestCreateConfig(t *testing.T) {
 	assert.NotNil(t, config.AuthRequestCookies)
 	assert.NotNil(t, config.AuthResponseHeaders)
 	assert.NotNil(t, config.AddAuthCookiesToResponse)
-	assert.Len(t, config.AuthRequestHeaders, 0)
-	assert.Len(t, config.AuthRequestCookies, 0)
-	assert.Len(t, config.AuthResponseHeaders, 0)
-	assert.Len(t, config.AddAuthCookiesToResponse, 0)
+	assert.Empty(t, config.AuthRequestHeaders)
+	assert.Empty(t, config.AuthRequestCookies)
+	assert.Empty(t, config.AuthResponseHeaders)
+	assert.Empty(t, config.AddAuthCookiesToResponse)
 }
 
 func TestNew(t *testing.T) {
@@ -118,6 +118,7 @@ func TestServeHTTP(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedBody:   "Success from next handler",
 			validateNext: func(t *testing.T, req *http.Request) {
+				t.Helper()
 				assert.Equal(t, "john.doe", req.Header.Get("X-Auth-User"))
 				assert.Equal(t, "john@example.com", req.Header.Get("X-Auth-Email"))
 			},
@@ -223,6 +224,7 @@ func TestServeHTTP(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedBody:   "Success from next handler",
 			validateNext: func(t *testing.T, req *http.Request) {
+				t.Helper()
 				assert.Equal(t, "custom-value", req.Header.Get("X-Custom-Header"))
 				assert.Equal(t, "other-value", req.Header.Get("X-Other-Header"))
 				assert.Equal(t, "", req.Header.Get("Y-Skip-Header"))
@@ -242,6 +244,7 @@ func TestServeHTTP(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			expectedBody:   "Success from next handler",
 			validateNext: func(t *testing.T, req *http.Request) {
+				t.Helper()
 				cookies := req.Cookies()
 				sessionFound := false
 				userFound := false
@@ -276,7 +279,7 @@ func TestServeHTTP(t *testing.T) {
 				}
 
 				w.WriteHeader(tt.authStatusCode)
-				w.Write([]byte(tt.authBody))
+				_, _ = w.Write([]byte(tt.authBody))
 			}))
 			defer authServer.Close()
 
@@ -292,7 +295,7 @@ func TestServeHTTP(t *testing.T) {
 					tt.validateNext(t, r)
 				}
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("Success from next handler"))
+				_, _ = w.Write([]byte("Success from next handler"))
 			})
 
 			// Create plugin
@@ -300,7 +303,7 @@ func TestServeHTTP(t *testing.T) {
 			require.NoError(t, err)
 
 			// Create test request
-			req := httptest.NewRequest("GET", "http://example.com/test", nil)
+			req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 			if tt.setupRequest != nil {
 				tt.setupRequest(req)
 			}
@@ -339,14 +342,14 @@ func TestServeHTTP_ErrorScenarios(t *testing.T) {
 		config := plugin.CreateConfig()
 		config.Address = "http://nonexistent.example.com:99999"
 
-		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			t.Error("next handler should not be called when auth service is unreachable")
 		})
 
 		handler, err := plugin.New(context.Background(), next, config, "test-plugin")
 		require.NoError(t, err)
 
-		req := httptest.NewRequest("GET", "http://example.com/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 		recorder := httptest.NewRecorder()
 
 		handler.ServeHTTP(recorder, req)
@@ -359,14 +362,14 @@ func TestServeHTTP_ErrorScenarios(t *testing.T) {
 		config := plugin.CreateConfig()
 		config.Address = "://invalid-url"
 
-		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			t.Error("next handler should not be called with invalid auth URL")
 		})
 
 		handler, err := plugin.New(context.Background(), next, config, "test-plugin")
 		require.NoError(t, err)
 
-		req := httptest.NewRequest("GET", "http://example.com/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 		recorder := httptest.NewRecorder()
 
 		handler.ServeHTTP(recorder, req)
@@ -376,10 +379,10 @@ func TestServeHTTP_ErrorScenarios(t *testing.T) {
 	})
 
 	t.Run("auth service returns invalid location header", func(t *testing.T) {
-		authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Location", "://invalid-location")
 			w.WriteHeader(http.StatusFound)
-			w.Write([]byte("Found"))
+			_, _ = w.Write([]byte("Found"))
 		}))
 		defer authServer.Close()
 
@@ -387,14 +390,14 @@ func TestServeHTTP_ErrorScenarios(t *testing.T) {
 		config.Address = authServer.URL
 		config.PreserveLocationHeader = true
 
-		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			t.Error("next handler should not be called for redirect response")
 		})
 
 		handler, err := plugin.New(context.Background(), next, config, "test-plugin")
 		require.NoError(t, err)
 
-		req := httptest.NewRequest("GET", "http://example.com/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 		recorder := httptest.NewRecorder()
 
 		handler.ServeHTTP(recorder, req)
@@ -416,7 +419,7 @@ func TestServeHTTP_RequestHeaders(t *testing.T) {
 			expectedHeaders: map[string]string{
 				"X-Forwarded-Host":   "example.com",
 				"X-Forwarded-Proto":  "http",
-				"X-Forwarded-Method": "GET",
+				"X-Forwarded-Method": http.MethodGet,
 				"X-Forwarded-Uri":    "http://example.com/test", // Request.RequestURI is full URL
 			},
 		},
@@ -426,7 +429,7 @@ func TestServeHTTP_RequestHeaders(t *testing.T) {
 			expectedHeaders: map[string]string{
 				"X-Original-Host":   "example.com",
 				"X-Original-Proto":  "http",
-				"X-Original-Method": "GET",
+				"X-Original-Method": http.MethodGet,
 				"X-Original-Uri":    "http://example.com/test", // Request.RequestURI is full URL
 			},
 		},
@@ -439,7 +442,7 @@ func TestServeHTTP_RequestHeaders(t *testing.T) {
 			authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				capturedHeaders = r.Header.Clone()
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("OK"))
+				_, _ = w.Write([]byte("OK"))
 			}))
 			defer authServer.Close()
 
@@ -454,7 +457,7 @@ func TestServeHTTP_RequestHeaders(t *testing.T) {
 			handler, err := plugin.New(context.Background(), next, config, "test-plugin")
 			require.NoError(t, err)
 
-			req := httptest.NewRequest("GET", "http://example.com/test", nil)
+			req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 			recorder := httptest.NewRecorder()
 
 			handler.ServeHTTP(recorder, req)
@@ -514,7 +517,7 @@ func TestServeHTTP_BodyForwarding(t *testing.T) {
 					receivedBody = body
 				}
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("OK"))
+				_, _ = w.Write([]byte("OK"))
 			}))
 			defer authServer.Close()
 
@@ -523,9 +526,9 @@ func TestServeHTTP_BodyForwarding(t *testing.T) {
 			config.ForwardBody = tt.forwardBody
 			config.MaxBodySize = tt.maxBodySize
 
-			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("Success from next handler"))
+				_, _ = w.Write([]byte("Success from next handler"))
 			})
 
 			handler, err := plugin.New(context.Background(), next, config, "test-plugin")
@@ -533,9 +536,9 @@ func TestServeHTTP_BodyForwarding(t *testing.T) {
 
 			var req *http.Request
 			if tt.requestBody != "" {
-				req = httptest.NewRequest("POST", "http://example.com/test", strings.NewReader(tt.requestBody))
+				req = httptest.NewRequest(http.MethodPost, "http://example.com/test", strings.NewReader(tt.requestBody))
 			} else {
-				req = httptest.NewRequest("POST", "http://example.com/test", nil)
+				req = httptest.NewRequest(http.MethodPost, "http://example.com/test", nil)
 			}
 			recorder := httptest.NewRecorder()
 
@@ -582,7 +585,7 @@ func TestServeHTTP_TimeoutScenarios(t *testing.T) {
 		handler, err := plugin.New(context.Background(), next, config, "test-plugin")
 		require.NoError(t, err)
 
-		req := httptest.NewRequest("GET", "http://example.com/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 		recorder := httptest.NewRecorder()
 
 		handler.ServeHTTP(recorder, req)
@@ -629,7 +632,7 @@ func TestServeHTTP_AdvancedHeaderScenarios(t *testing.T) {
 				expectedForwarded: map[string]string{
 					"X-Forwarded-Proto":  "http", // Determined from request
 					"X-Forwarded-Host":   "example.com",
-					"X-Forwarded-Method": "GET",
+					"X-Forwarded-Method": http.MethodGet,
 				},
 			},
 		}
@@ -655,7 +658,7 @@ func TestServeHTTP_AdvancedHeaderScenarios(t *testing.T) {
 				handler, err := plugin.New(context.Background(), next, config, "test-plugin")
 				require.NoError(t, err)
 
-				req := httptest.NewRequest("GET", "http://example.com/test", nil)
+				req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 				req.RemoteAddr = "192.168.1.100:12345"
 
 				// Set existing forward headers
@@ -678,7 +681,7 @@ func TestServeHTTP_AdvancedHeaderScenarios(t *testing.T) {
 					assert.Equal(t, "192.168.1.100", capturedHeaders.Get("X-Forwarded-For"))
 					assert.Equal(t, "http", capturedHeaders.Get("X-Forwarded-Proto"))
 					assert.Equal(t, "example.com", capturedHeaders.Get("X-Forwarded-Host"))
-					assert.Equal(t, "GET", capturedHeaders.Get("X-Forwarded-Method"))
+					assert.Equal(t, http.MethodGet, capturedHeaders.Get("X-Forwarded-Method"))
 				}
 			})
 		}

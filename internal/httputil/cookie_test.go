@@ -11,14 +11,14 @@ import (
 func TestCopyCookies(t *testing.T) {
 	t.Run("copies specified cookies", func(t *testing.T) {
 		// Create source request with cookies
-		srcReq, _ := http.NewRequest("GET", "http://example.com", nil)
+		srcReq, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
 		srcReq.AddCookie(&http.Cookie{Name: "session", Value: "abc123"})
 		srcReq.AddCookie(&http.Cookie{Name: "user", Value: "john"})
 		srcReq.AddCookie(&http.Cookie{Name: "csrf", Value: "token456"})
 		srcReq.AddCookie(&http.Cookie{Name: "other", Value: "skip"})
 
 		// Create destination request
-		dstReq, _ := http.NewRequest("GET", "http://auth.example.com", nil)
+		dstReq, _ := http.NewRequest(http.MethodGet, "http://auth.example.com", nil)
 
 		// Copy specific cookies
 		filter := []string{"session", "user"}
@@ -43,44 +43,44 @@ func TestCopyCookies(t *testing.T) {
 	})
 
 	t.Run("empty filter copies no cookies", func(t *testing.T) {
-		srcReq, _ := http.NewRequest("GET", "http://example.com", nil)
+		srcReq, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
 		srcReq.AddCookie(&http.Cookie{Name: "session", Value: "abc123"})
 
-		dstReq, _ := http.NewRequest("GET", "http://auth.example.com", nil)
+		dstReq, _ := http.NewRequest(http.MethodGet, "http://auth.example.com", nil)
 
 		httputil.CopyCookies(srcReq, dstReq, []string{})
 
-		assert.Len(t, dstReq.Cookies(), 0)
+		assert.Empty(t, dstReq.Cookies())
 	})
 
 	t.Run("nil filter copies no cookies", func(t *testing.T) {
-		srcReq, _ := http.NewRequest("GET", "http://example.com", nil)
+		srcReq, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
 		srcReq.AddCookie(&http.Cookie{Name: "session", Value: "abc123"})
 
-		dstReq, _ := http.NewRequest("GET", "http://auth.example.com", nil)
+		dstReq, _ := http.NewRequest(http.MethodGet, "http://auth.example.com", nil)
 
 		httputil.CopyCookies(srcReq, dstReq, nil)
 
-		assert.Len(t, dstReq.Cookies(), 0)
+		assert.Empty(t, dstReq.Cookies())
 	})
 
 	t.Run("filter with non-existent cookie names", func(t *testing.T) {
-		srcReq, _ := http.NewRequest("GET", "http://example.com", nil)
+		srcReq, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
 		srcReq.AddCookie(&http.Cookie{Name: "session", Value: "abc123"})
 
-		dstReq, _ := http.NewRequest("GET", "http://auth.example.com", nil)
+		dstReq, _ := http.NewRequest(http.MethodGet, "http://auth.example.com", nil)
 
 		filter := []string{"nonexistent", "alsononexistent"}
 		httputil.CopyCookies(srcReq, dstReq, filter)
 
-		assert.Len(t, dstReq.Cookies(), 0)
+		assert.Empty(t, dstReq.Cookies())
 	})
 
 	t.Run("duplicate cookie names in filter", func(t *testing.T) {
-		srcReq, _ := http.NewRequest("GET", "http://example.com", nil)
+		srcReq, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
 		srcReq.AddCookie(&http.Cookie{Name: "session", Value: "abc123"})
 
-		dstReq, _ := http.NewRequest("GET", "http://auth.example.com", nil)
+		dstReq, _ := http.NewRequest(http.MethodGet, "http://auth.example.com", nil)
 
 		filter := []string{"session", "session", "session"}
 		httputil.CopyCookies(srcReq, dstReq, filter)
@@ -93,7 +93,7 @@ func TestCopyCookies(t *testing.T) {
 	})
 
 	t.Run("cookies with same name but different attributes", func(t *testing.T) {
-		srcReq, _ := http.NewRequest("GET", "http://example.com", nil)
+		srcReq, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
 		cookie := &http.Cookie{
 			Name:     "session",
 			Value:    "abc123",
@@ -104,7 +104,7 @@ func TestCopyCookies(t *testing.T) {
 		}
 		srcReq.AddCookie(cookie)
 
-		dstReq, _ := http.NewRequest("GET", "http://auth.example.com", nil)
+		dstReq, _ := http.NewRequest(http.MethodGet, "http://auth.example.com", nil)
 
 		filter := []string{"session"}
 		httputil.CopyCookies(srcReq, dstReq, filter)

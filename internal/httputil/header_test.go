@@ -54,7 +54,7 @@ func TestCopyHeaders(t *testing.T) {
 
 		httputil.CopyHeaders(srcHeaders, dstHeaders, []string{})
 
-		assert.Len(t, dstHeaders, 0)
+		assert.Empty(t, dstHeaders)
 	})
 
 	t.Run("nil filter copies no headers", func(t *testing.T) {
@@ -65,7 +65,7 @@ func TestCopyHeaders(t *testing.T) {
 
 		httputil.CopyHeaders(srcHeaders, dstHeaders, nil)
 
-		assert.Len(t, dstHeaders, 0)
+		assert.Empty(t, dstHeaders)
 	})
 
 	t.Run("filter with non-existent headers", func(t *testing.T) {
@@ -77,7 +77,7 @@ func TestCopyHeaders(t *testing.T) {
 		filter := []string{"NonExistent", "AlsoNonExistent"}
 		httputil.CopyHeaders(srcHeaders, dstHeaders, filter)
 
-		assert.Len(t, dstHeaders, 0)
+		assert.Empty(t, dstHeaders)
 	})
 
 	t.Run("case insensitive header matching", func(t *testing.T) {
@@ -163,7 +163,7 @@ func TestCopyHeadersRegex(t *testing.T) {
 
 		httputil.CopyHeadersRegex(srcHeaders, dstHeaders, nil)
 
-		assert.Len(t, dstHeaders, 0)
+		assert.Empty(t, dstHeaders)
 	})
 
 	t.Run("regex with no matches copies no headers", func(t *testing.T) {
@@ -176,7 +176,7 @@ func TestCopyHeadersRegex(t *testing.T) {
 		regex := regexp.MustCompile("(?i)^X-NonExistent-.*")
 		httputil.CopyHeadersRegex(srcHeaders, dstHeaders, regex)
 
-		assert.Len(t, dstHeaders, 0)
+		assert.Empty(t, dstHeaders)
 	})
 
 	t.Run("complex regex patterns", func(t *testing.T) {

@@ -1,3 +1,4 @@
+// Package httputil provides HTTP utility functions for header and cookie manipulation.
 package httputil
 
 import (

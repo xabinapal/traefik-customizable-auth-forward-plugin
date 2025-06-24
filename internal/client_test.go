@@ -75,7 +75,7 @@ func TestNewClient(t *testing.T) {
 		require.NoError(t, err)
 
 		// Create a test request
-		req, _ := http.NewRequest("GET", "http://example.com", nil)
+		req, _ := http.NewRequest(http.MethodGet, "http://example.com", nil)
 
 		// Test redirect behavior
 		redirectErr := client.client.CheckRedirect(req, []*http.Request{})
@@ -125,7 +125,7 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		authReq, err := client.CreateAuthRequest(req)
 		require.NoError(t, err)
 
-		assert.Equal(t, "GET", authReq.Method)
+		assert.Equal(t, http.MethodGet, authReq.Method)
 		assert.Equal(t, "http://auth.example.com", authReq.URL.String())
 		assert.Equal(t, req.Context(), authReq.Context())
 	})
@@ -158,7 +158,7 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 	})
 
 	t.Run("handles HTTPS requests", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "https://example.com/secure", nil)
+		req := httptest.NewRequest(http.MethodGet, "https://example.com/secure", nil)
 		req.RemoteAddr = "192.168.1.100:12345"
 		req.TLS = &tls.ConnectionState{} // Simulate TLS connection
 
@@ -172,7 +172,7 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		config.TrustForwardHeader = true
 		defer func() { config.TrustForwardHeader = false }()
 
-		req := httptest.NewRequest("GET", "http://example.com/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 		req.RemoteAddr = "192.168.1.100:12345"
 		req.Header.Set("X-Forwarded-For", "203.0.113.1")
 		req.Header.Set("X-Forwarded-Method", "PUT")
@@ -198,7 +198,7 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 			config.AuthRequestAbsoluteUrlHeader = ""
 		}()
 
-		req := httptest.NewRequest("GET", "https://example.com:8080/api/test?param=value", nil)
+		req := httptest.NewRequest(http.MethodGet, "https://example.com:8080/api/test?param=value", nil)
 		req.TLS = &tls.ConnectionState{}
 
 		authReq, err := client.CreateAuthRequest(req)
@@ -212,7 +212,7 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 	})
 
 	t.Run("handles empty remote address", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "http://example.com/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 		req.RemoteAddr = ""
 
 		authReq, err := client.CreateAuthRequest(req)
@@ -223,7 +223,7 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 	})
 
 	t.Run("handles malformed remote address", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "http://example.com/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 		req.RemoteAddr = "malformed-address"
 
 		authReq, err := client.CreateAuthRequest(req)
@@ -237,7 +237,7 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		config.AuthRequestHeaders = []string{"Authorization", "X-API-Key"}
 		defer func() { config.AuthRequestHeaders = []string{} }()
 
-		req := httptest.NewRequest("GET", "http://example.com/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 		req.Header.Set("Authorization", "Bearer token123")
 		req.Header.Set("X-API-Key", "key456")
 		req.Header.Set("Content-Type", "application/json")
@@ -255,7 +255,7 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		config.AuthRequestHeadersRegex = regex
 		defer func() { config.AuthRequestHeadersRegex = nil }()
 
-		req := httptest.NewRequest("GET", "http://example.com/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 		req.Header.Set("X-Custom-Header", "custom1")
 		req.Header.Set("X-Custom-Other", "custom2")
 		req.Header.Set("X-Other", "other")
@@ -272,7 +272,7 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		config.AuthRequestCookies = []string{"session", "csrf"}
 		defer func() { config.AuthRequestCookies = []string{} }()
 
-		req := httptest.NewRequest("GET", "http://example.com/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 		req.AddCookie(&http.Cookie{Name: "session", Value: "abc123"})
 		req.AddCookie(&http.Cookie{Name: "csrf", Value: "token456"})
 		req.AddCookie(&http.Cookie{Name: "other", Value: "skip"})
@@ -356,7 +356,7 @@ func TestClient_CreateAuthRequest(t *testing.T) {
 		config.ForwardBody = true
 		defer func() { config.ForwardBody = false }()
 
-		req := httptest.NewRequest("GET", "http://example.com/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 
 		authReq, err := client.CreateAuthRequest(req)
 		require.NoError(t, err)
@@ -372,7 +372,7 @@ func TestClient_Do(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-Test", "response")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("test response"))
+			_, _ = w.Write([]byte("test response"))
 		}))
 		defer server.Close()
 
@@ -385,12 +385,12 @@ func TestClient_Do(t *testing.T) {
 		client, err := NewClient(config)
 		require.NoError(t, err)
 
-		req, err := http.NewRequest("GET", server.URL, nil)
+		req, err := http.NewRequest(http.MethodGet, server.URL, nil)
 		require.NoError(t, err)
 
 		resp, err := client.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, "response", resp.Header.Get("X-Test"))
@@ -404,7 +404,7 @@ func TestClient_Do(t *testing.T) {
 		// Create test server that returns error
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("internal server error"))
+			_, _ = w.Write([]byte("internal server error"))
 		}))
 		defer server.Close()
 
@@ -417,12 +417,12 @@ func TestClient_Do(t *testing.T) {
 		client, err := NewClient(config)
 		require.NoError(t, err)
 
-		req, err := http.NewRequest("GET", server.URL, nil)
+		req, err := http.NewRequest(http.MethodGet, server.URL, nil)
 		require.NoError(t, err)
 
 		resp, err := client.Do(req)
 		require.NoError(t, err)
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	})
@@ -437,7 +437,7 @@ func TestClient_Do(t *testing.T) {
 		client, err := NewClient(config)
 		require.NoError(t, err)
 
-		req, err := http.NewRequest("GET", "http://nonexistent.example.com:99999", nil)
+		req, err := http.NewRequest(http.MethodGet, "http://nonexistent.example.com:99999", nil)
 		require.NoError(t, err)
 
 		resp, err := client.Do(req)
@@ -459,7 +459,7 @@ func TestClient_CreateAuthRequest_ErrorCases(t *testing.T) {
 			config: config,
 		}
 
-		req := httptest.NewRequest("GET", "http://example.com/test", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 
 		authReq, err := client.CreateAuthRequest(req)
 		assert.Error(t, err)
@@ -487,7 +487,8 @@ func TestClient_CreateAuthRequest_ErrorCases(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
 
-		req := httptest.NewRequestWithContext(ctx, "GET", "http://example.com/test", nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.com/test", nil)
+		require.NoError(t, err)
 
 		authReq, err := client.CreateAuthRequest(req)
 		require.NoError(t, err)                 // Creating request succeeds

@@ -13,9 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: [ 1.22 ]
+        go-version:
+          - 1.22
     env:
-      GOLANGCI_LINT_VERSION: v1.56.2
+      GOLANGCI_LINT_VERSION: v2.1.6
       YAEGI_VERSION: v0.16.1
       CGO_ENABLED: 0
     defaults:

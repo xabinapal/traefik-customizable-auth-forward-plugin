@@ -61,13 +61,13 @@ func CreateConfig() *internal.Config {
 func New(ctx context.Context, next http.Handler, config *internal.Config, name string) (http.Handler, error) {
 	configParsed, err := internal.ParseConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing config: %v", err)
+		return nil, fmt.Errorf("error parsing config: %w", err)
 	}
 
 	// Create HTTP client with custom configuration
 	client, err := internal.NewClient(configParsed)
 	if err != nil {
-		return nil, fmt.Errorf("error creating client: %v", err)
+		return nil, fmt.Errorf("error creating client: %w", err)
 	}
 
 	plugin := &Plugin{
@@ -97,7 +97,11 @@ func (cfa *Plugin) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer authRes.Body.Close()
+	defer func() {
+		if closeErr := authRes.Body.Close(); closeErr != nil {
+			fmt.Printf("error closing auth response body: %v\n", closeErr)
+		}
+	}()
 
 	fmt.Printf("auth request returned status code %v\n", authRes.StatusCode)
 
@@ -110,21 +114,21 @@ func (cfa *Plugin) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		location := authRes.Header.Get("Location")
 		if location != "" {
 			if cfa.config.PreserveLocationHeader {
-				locationUrl, err := url.Parse(location)
+				locationURL, err := url.Parse(location)
 				if err != nil {
 					return
 				}
 
-				if !locationUrl.IsAbs() {
+				if !locationURL.IsAbs() {
 					addressURL, err := url.Parse(cfa.config.Address)
 					if err != nil {
 						return
 					}
 
-					locationUrl.Scheme = addressURL.Scheme
-					locationUrl.Host = addressURL.Host
+					locationURL.Scheme = addressURL.Scheme
+					locationURL.Host = addressURL.Host
 
-					location = locationUrl.String()
+					location = locationURL.String()
 				}
 			}
 

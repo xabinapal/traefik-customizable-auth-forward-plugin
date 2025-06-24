@@ -1,7 +1,7 @@
 package httputil
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
 	"net/textproto"
 	"slices"
@@ -26,9 +26,10 @@ func (rm *ResponseModifier) AddCookie(cookie *http.Cookie) {
 	rm.cookies[cookie.Name] = cookie
 }
 
+// WriteHeader writes the status code and any added cookies to the response.
 func (rm *ResponseModifier) WriteHeader(statusCode int) {
 	existingCookies := rm.Header().Values("Set-Cookie")
-	existingCookieNames := make([]string, len(existingCookies))
+	existingCookieNames := make([]string, 0, len(existingCookies))
 
 	rm.Header().Del("Set-Cookie")
 
@@ -51,7 +52,7 @@ func (rm *ResponseModifier) WriteHeader(statusCode int) {
 func parseCookieNames(cookie string) ([]string, error) {
 	parts := strings.Split(textproto.TrimString(cookie), ";")
 	if len(parts) == 1 && parts[0] == "" {
-		return nil, fmt.Errorf("blank cookie")
+		return nil, errors.New("blank cookie")
 	}
 
 	cookies := make([]string, 0, len(parts))
