@@ -32,6 +32,7 @@ This plugin extends Traefik's built-in `forwardAuth` middleware with additional 
 - **Absolute URL header**: Send the complete original request URL in a single header for authentication servers that require it.
 - **Request customization**: Fine-tune communication with your authentication server through configurable timeouts and TLS settings.
 - **Enhanced header/cookie management**: More granular control over which headers and cookies are copied to/from the authentication server.
+- **Status code mappings**: Customize HTTP status codes returned by the authentication server with global and path-based mappings.
 
 ## Installation
 
@@ -151,6 +152,17 @@ middlewares:
     - Maximum size of body to forward to the authentication service.
     - `-1` will send the entire body. Every other value will truncate the body if it is larger.
 
+- `statusCodeGlobalMappings`: `map[int]int`, optional
+    - Global mapping of authentication service status codes to different status codes.
+    - Applied to all non-2xx requests unless overridden by path-specific mappings.
+    - E.g., `{401: 403}` will return `403 Forbidden` instead of `401 Unauthorized`.
+
+- `statusCodePathMappings`: `[]PathMappingConfig`, optional
+    - Path-based mapping of authentication service status codes to different status codes.
+    - Takes precedence over global mappings when the request path matches.
+    - Each mapping has a `path` string and a `mappings` map of status codes.
+    - Longest matching path takes precedence when multiple paths match.
+
 ## Examples
 
 ### File YAML Provider
@@ -174,6 +186,18 @@ http:
           addAuthCookiesToResponse:
             - __auth_identity
             - __auth_csrf
+          statusCodeGlobalMappings:
+            401: 403
+            404: 410
+          statusCodePathMappings:
+            - path: /api/v1
+              mappings:
+                401: 418
+                403: 451
+            - path: /admin
+              mappings:
+                401: 404
+                403: 404
 
   routers:
     api:
@@ -200,14 +224,26 @@ spec:
       tls:
         minVersion: 13
         insecureSkipVerify: false
-          headerPrefix: X-Original
-          absoluteUrlHeader: Absolute-Url
-          authRequestCookies:
-            - __auth_session
-          authResponseHeadersRegex: ^X-Auth-.*
-          addAuthCookiesToResponse:
-            - __auth_identity
-            - __auth_csrf
+      headerPrefix: X-Original
+      absoluteUrlHeader: Absolute-Url
+      authRequestCookies:
+        - __auth_session
+      authResponseHeadersRegex: ^X-Auth-.*
+      addAuthCookiesToResponse:
+        - __auth_identity
+        - __auth_csrf
+      statusCodeGlobalMappings:
+        401: 403
+        404: 410
+      statusCodePathMappings:
+        - path: /api/v1
+          mappings:
+            401: 418
+            403: 451
+        - path: /admin
+          mappings:
+            401: 404
+            403: 404
 ```
 
 **IngressRoute**
