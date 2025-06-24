@@ -6,4 +6,37 @@ import: github.com/xabinapal/traefik-customizable-auth-forward-plugin
 
 summary: Drop-in replacement for native forward auth middleware with extra options
 
-testData: {}
+testData:
+  address: "https://auth.example.com/auth"
+  timeout: "30s"
+  tls:
+    ca: "/path/to/ca.crt"
+    cert: "/path/to/client.crt"
+    key: "/path/to/client.key"
+    minVersion: 12
+    maxVersion: 13
+    insecureSkipVerify: false
+  preserveRequestMethod: true
+  headerPrefix: "X-Forwarded"
+  absoluteUrlHeader: "Url"
+  trustForwardHeader: false
+  authRequestHeaders:
+    - "Authorization"
+    - "X-API-Key"
+    - "X-User-Id"
+  authRequestHeadersRegex: "^X-(Custom|Special)-.*"
+  authRequestCookies:
+    - "session_token"
+    - "auth_cookie"
+    - "csrf_token"
+  authResponseHeaders:
+    - "X-User-Name"
+    - "X-User-Email"
+    - "X-User-Roles"
+  authResponseHeadersRegex: "^X-Auth-.*"
+  addAuthCookiesToResponse:
+    - "new_session"
+    - "refresh_token"
+  preserveLocationHeader: true
+  forwardBody: true
+  maxBodySize: 65536
