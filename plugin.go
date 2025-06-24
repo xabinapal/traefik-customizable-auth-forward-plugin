@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal"
 	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal/httputil"
@@ -51,6 +52,9 @@ func CreateConfig() *internal.Config {
 		AuthResponseHeadersRegex: "",
 		AddAuthCookiesToResponse: []string{},
 		PreserveLocationHeader:   false,
+
+		StatusCodeGlobalMappings: map[int]int{},
+		StatusCodePathMappings:   []internal.PathMappingConfig{},
 
 		ForwardBody: false,
 		MaxBodySize: -1,
@@ -106,7 +110,9 @@ func (cfa *Plugin) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	// If auth service returns non-2xx status, forward its response
 	if authRes.StatusCode < http.StatusOK || authRes.StatusCode >= http.StatusMultipleChoices {
-		fmt.Printf("forwarding auth response to client\n")
+		mappedStatusCode := mapStatusCode(req.URL.Path, authRes.StatusCode, cfa.config.StatusCodeGlobalMappings, cfa.config.StatusCodePathMappings)
+
+		fmt.Printf("forwarding auth response to client with status code %v\n", mappedStatusCode)
 
 		httputil.CopyHeaders(authRes.Header, rw.Header(), []string{})
 
@@ -134,7 +140,7 @@ func (cfa *Plugin) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			rw.Header().Set("Location", location)
 		}
 
-		rw.WriteHeader(authRes.StatusCode)
+		rw.WriteHeader(mappedStatusCode)
 
 		if _, err := io.Copy(rw, authRes.Body); err != nil {
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
@@ -153,4 +159,34 @@ func (cfa *Plugin) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	httputil.CopyCookies(authRes, responseModifier, cfa.config.AddAuthCookiesToResponse)
 
 	cfa.next.ServeHTTP(responseModifier, req)
+}
+
+func mapStatusCode(path string, statusCode int, globalMappings map[int]int, pathMappings []internal.PathMappingConfig) int {
+	var longestMatch string
+	var longestMatchStatusCode int
+	var longestPathLen int
+
+	for _, mapping := range pathMappings {
+		if strings.HasPrefix(path, mapping.Path) && len(mapping.Path) > longestPathLen {
+			if mappedCode, exists := mapping.Mappings[statusCode]; exists {
+				longestMatch = mapping.Path
+				longestMatchStatusCode = mappedCode
+				longestPathLen = len(mapping.Path)
+			}
+		}
+
+		fmt.Printf("\n")
+	}
+
+	if longestMatch != "" {
+		fmt.Printf("found path mapping %v -> %v\n", longestMatch, longestMatchStatusCode)
+		return longestMatchStatusCode
+	}
+
+	if mappedCode, exists := globalMappings[statusCode]; exists {
+		fmt.Printf("found global mapping %v -> %v\n", path, mappedCode)
+		return mappedCode
+	}
+
+	return statusCode
 }

@@ -59,6 +59,12 @@ type Config struct {
 
 	// MaxBodySize sets the maximum size of the body to forward (default: 64KB)
 	MaxBodySize int64 `json:"maxBodySize,omitempty"`
+
+	// StatusCodeGlobalMappings allows to modify authentication service status codes
+	StatusCodeGlobalMappings map[int]int `json:"statusCodeGlobalMappings,omitempty"`
+
+	// StatusCodePathMappings allows to modify authentication service status codes based on the request path
+	StatusCodePathMappings []PathMappingConfig `json:"statusCodePathMappings,omitempty"`
 }
 
 type TLSConfig struct {
@@ -79,6 +85,11 @@ type TLSConfig struct {
 
 	// InsecureSkipVerify indicates whether to skip certificate verification
 	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
+}
+
+type PathMappingConfig struct {
+	Path     string      `json:"path,omitempty"`
+	Mappings map[int]int `json:"mappings,omitempty"`
 }
 
 type ConfigParsed struct {
