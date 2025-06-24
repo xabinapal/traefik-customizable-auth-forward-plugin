@@ -26,8 +26,8 @@ func NewClient(config *ConfigParsed) (*Client, error) {
 
 	if config.TLS != nil {
 		tlsConfig := &tls.Config{
-			MinVersion:         config.TLS.MinVersion,
-			MaxVersion:         config.TLS.MaxVersion,
+			MinVersion:         769 + config.TLS.MinVersion - 10,
+			MaxVersion:         769 + config.TLS.MaxVersion - 10,
 			InsecureSkipVerify: config.TLS.InsecureSkipVerify,
 		}
 

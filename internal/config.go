@@ -112,6 +112,30 @@ func ParseConfig(config *Config) (*ConfigParsed, error) {
 		}
 	}
 
+	if config.TLS == nil {
+		config.TLS = &TLSConfig{
+			MinVersion:         12,
+			MaxVersion:         13,
+			InsecureSkipVerify: true,
+		}
+	} else {
+		if config.TLS.MinVersion == 0 {
+			config.TLS.MinVersion = 12
+		} else if config.TLS.MinVersion < 10 || config.TLS.MinVersion > 13 {
+			return nil, fmt.Errorf("minVersion must be between 10 and 13")
+		}
+
+		if config.TLS.MaxVersion == 0 {
+			config.TLS.MaxVersion = 13
+		} else if config.TLS.MaxVersion < 10 || config.TLS.MaxVersion > 13 {
+			return nil, fmt.Errorf("maxVersion must be between 10 and 13")
+		}
+
+		if config.TLS.MinVersion > config.TLS.MaxVersion {
+			return nil, fmt.Errorf("minVersion cannot be greater than maxVersion")
+		}
+	}
+
 	// Compile auth request headers regex
 	var authRequestHeadersRegex *regexp.Regexp
 	if config.AuthRequestHeadersRegex != "" {
