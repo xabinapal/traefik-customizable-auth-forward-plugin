@@ -1,6 +1,12 @@
 package internal
 
-import "time"
+import (
+	"fmt"
+	"net/http"
+	"regexp"
+	"strings"
+	"time"
+)
 
 type Config struct {
 	// Address is the URL of the authentication service
@@ -20,6 +26,9 @@ type Config struct {
 	// Setting this to "X-Original" would result in "X-Original-Host", etc.
 	HeaderPrefix string `json:"headerPrefix,omitempty"`
 
+	// AbsoluteUrlHeader is the name of the header to copy the absolute URL to the auth request
+	AbsoluteUrlHeader string `json:"absoluteUrlHeader,omitempty"`
+
 	// TrustForwardHeader indicates whether to use existing forward headers in the original request
 	// as the values for the authentication headers in the auth request
 	TrustForwardHeader bool `json:"trustForwardHeader,omitempty"`
@@ -31,7 +40,7 @@ type Config struct {
 	AuthRequestHeadersRegex string `json:"authRequestHeadersRegex,omitempty"`
 
 	// AddAuthCookiesToRequest is a list of cookie names to copy from original request to auth request
-	AddAuthCookiesToRequest []string `json:"addAuthCookiesToRequest,omitempty"`
+	AuthRequestCookies []string `json:"authRequestCookies,omitempty"`
 
 	// AuthResponseHeaders is a list of headers to copy from auth response to the forwarded request
 	AuthResponseHeaders []string `json:"authResponseHeaders,omitempty"`
@@ -70,4 +79,75 @@ type TLSConfig struct {
 
 	// InsecureSkipVerify indicates whether to skip certificate verification
 	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
+}
+
+type ConfigParsed struct {
+	Config
+
+	AuthRequestForHeader    string
+	AuthRequestMethodHeader string
+	AuthRequestProtoHeader  string
+	AuthRequestHostHeader   string
+	AuthRequestUriHeader    string
+
+	AuthRequestAbsoluteUrlHeader string
+
+	AuthRequestHeadersRegex  *regexp.Regexp
+	AuthResponseHeadersRegex *regexp.Regexp
+}
+
+func ParseConfig(config *Config) (*ConfigParsed, error) {
+	// Validate config
+	if config.Address == "" {
+		return nil, fmt.Errorf("address cannot be empty")
+	}
+
+	if config.HeaderPrefix == "" {
+		config.HeaderPrefix = "X-Forwarded"
+	} else if strings.HasSuffix(config.HeaderPrefix, "-") {
+		config.HeaderPrefix = strings.TrimSuffix(config.HeaderPrefix, "-")
+
+		if config.HeaderPrefix == "" {
+			config.HeaderPrefix = "X-Forwarded"
+		}
+	}
+
+	// Compile auth request headers regex
+	var authRequestHeadersRegex *regexp.Regexp
+	if config.AuthRequestHeadersRegex != "" {
+		re, err := regexp.Compile("(?i)" + config.AuthRequestHeadersRegex)
+		if err != nil {
+			return nil, fmt.Errorf("error compiling auth request headers regex: %w", err)
+		}
+		authRequestHeadersRegex = re
+	}
+
+	// Compile auth response headers regex
+	var authResponseHeadersRegex *regexp.Regexp
+	if config.AuthResponseHeadersRegex != "" {
+		re, err := regexp.Compile("(?i)" + config.AuthResponseHeadersRegex)
+		if err != nil {
+			return nil, fmt.Errorf("error compiling auth response headers regex: %v", err)
+		}
+		authResponseHeadersRegex = re
+	}
+
+	configParsed := &ConfigParsed{
+		Config: *config,
+
+		AuthRequestForHeader:    http.CanonicalHeaderKey(config.HeaderPrefix + "-For"),
+		AuthRequestMethodHeader: http.CanonicalHeaderKey(config.HeaderPrefix + "-Method"),
+		AuthRequestProtoHeader:  http.CanonicalHeaderKey(config.HeaderPrefix + "-Proto"),
+		AuthRequestHostHeader:   http.CanonicalHeaderKey(config.HeaderPrefix + "-Host"),
+		AuthRequestUriHeader:    http.CanonicalHeaderKey(config.HeaderPrefix + "-Uri"),
+
+		AuthRequestHeadersRegex:  authRequestHeadersRegex,
+		AuthResponseHeadersRegex: authResponseHeadersRegex,
+	}
+
+	if config.AbsoluteUrlHeader != "" {
+		configParsed.AuthRequestAbsoluteUrlHeader = http.CanonicalHeaderKey(config.HeaderPrefix + "-" + config.AbsoluteUrlHeader)
+	}
+
+	return configParsed, nil
 }

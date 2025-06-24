@@ -7,28 +7,15 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"regexp"
+	"net/url"
 )
 
 type Client struct {
 	client *http.Client
-
-	address string
-
-	preserveMethod bool
-
-	headerPrefix       string
-	trustForwardHeader bool
-
-	authRequestHeaders      []string
-	authRequestHeadersRegex *regexp.Regexp
-	addAuthCookiesToRequest []string
-
-	forwardBody bool
-	maxBodySize int64
+	config *ConfigParsed
 }
 
-func CreateClient(config *Config) (*Client, error) {
+func NewClient(config *ConfigParsed) (*Client, error) {
 	httpClient := &http.Client{
 		CheckRedirect: func(r *http.Request, via []*http.Request) error {
 			// Don't follow redirects
@@ -51,130 +38,91 @@ func CreateClient(config *Config) (*Client, error) {
 		httpClient.Transport = transport
 	}
 
-	var authRequestHeadersRegex *regexp.Regexp
-	if config.AuthRequestHeadersRegex != "" {
-		re, err := regexp.Compile(config.AuthRequestHeadersRegex)
-		if err != nil {
-			return nil, fmt.Errorf("error compiling auth request headers regex: %w", err)
-		}
-		authRequestHeadersRegex = re
-	}
-
 	return &Client{
 		client: httpClient,
-
-		address: config.Address,
-
-		preserveMethod: config.PreserveRequestMethod,
-
-		headerPrefix:       config.HeaderPrefix,
-		trustForwardHeader: config.TrustForwardHeader,
-
-		authRequestHeaders:      config.AuthRequestHeaders,
-		authRequestHeadersRegex: authRequestHeadersRegex,
-		addAuthCookiesToRequest: config.AddAuthCookiesToRequest,
-
-		forwardBody: config.ForwardBody,
-		maxBodySize: config.MaxBodySize,
+		config: config,
 	}, nil
 }
 
 func (c *Client) CreateAuthRequest(req *http.Request) (*http.Request, error) {
 	method := http.MethodGet
-	if c.preserveMethod {
+	if c.config.PreserveRequestMethod {
 		method = req.Method
 	}
 
 	fmt.Printf("creating auth request\n")
 
-	authReq, err := http.NewRequestWithContext(req.Context(), method, c.address, nil)
+	authReq, err := http.NewRequestWithContext(req.Context(), method, c.config.Address, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating auth request: %w", err)
 	}
 
-	c.attachForwardHeaders(authReq, req)
+	CopyHeaders(req.Header, authReq.Header, c.config.AuthRequestHeaders)
+	CopyHeadersRegex(req.Header, authReq.Header, c.config.AuthRequestHeadersRegex)
 
-	c.attachRequestHeaders(authReq, req)
-	c.attachRequestCookies(authReq, req)
+	CopyCookies(req, authReq, c.config.AuthRequestCookies)
 
-	if c.forwardBody {
-		c.attachRequestBody(authReq, req)
+	c.setAuthRequestHeaders(req, authReq)
+
+	if c.config.ForwardBody {
+		c.setAuthRequestBody(req, authReq)
 	}
 
 	return authReq, nil
 }
 
-func (c *Client) attachForwardHeaders(authReq *http.Request, req *http.Request) {
-	forHeader := c.headerPrefix + "-For"
+func (c *Client) setAuthRequestHeaders(req *http.Request, authReq *http.Request) {
+	absoluteUrl := url.URL{}
+
 	forwardedFor := req.Header.Get("X-Forwarded-For")
-	if forwardedFor != "" && c.trustForwardHeader {
-		authReq.Header.Set(forHeader, forwardedFor)
+	if forwardedFor != "" && c.config.TrustForwardHeader {
+		authReq.Header.Set(c.config.AuthRequestForHeader, forwardedFor)
 	} else if req.RemoteAddr != "" {
 		if clientIP, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
-			authReq.Header.Set(forHeader, clientIP)
+			authReq.Header.Set(c.config.AuthRequestForHeader, clientIP)
 		}
 	}
 
-	methodHeader := c.headerPrefix + "-Method"
 	forwardedMethod := req.Header.Get("X-Forwarded-Method")
-	if forwardedMethod != "" && c.trustForwardHeader {
-		authReq.Header.Set(methodHeader, forwardedMethod)
+	if forwardedMethod != "" && c.config.TrustForwardHeader {
+		authReq.Header.Set(c.config.AuthRequestMethodHeader, forwardedMethod)
 	} else if req.Method != "" {
-		authReq.Header.Set(methodHeader, req.Method)
+		authReq.Header.Set(c.config.AuthRequestMethodHeader, req.Method)
 	}
 
-	protoHeader := c.headerPrefix + "-Proto"
 	forwardedProto := req.Header.Get("X-Forwarded-Proto")
-	if forwardedProto != "" && c.trustForwardHeader {
-		authReq.Header.Set(protoHeader, forwardedProto)
+	if forwardedProto != "" && c.config.TrustForwardHeader {
+		absoluteUrl.Scheme = forwardedProto
 	} else if req.TLS != nil {
-		authReq.Header.Set(protoHeader, "https")
+		absoluteUrl.Scheme = "https"
 	} else {
-		authReq.Header.Set(protoHeader, "http")
+		absoluteUrl.Scheme = "http"
 	}
 
-	hostHeader := c.headerPrefix + "-Host"
 	forwardedHost := req.Header.Get("X-Forwarded-Host")
-	if forwardedHost != "" && c.trustForwardHeader {
-		authReq.Header.Set(hostHeader, forwardedHost)
+	if forwardedHost != "" && c.config.TrustForwardHeader {
+		absoluteUrl.Host = forwardedHost
 	} else if req.Host != "" {
-		authReq.Header.Set(hostHeader, req.Host)
+		absoluteUrl.Host = req.Host
 	}
 
-	uriHeader := c.headerPrefix + "-Uri"
 	forwardedUri := req.Header.Get("X-Forwarded-Uri")
-	if forwardedUri != "" && c.trustForwardHeader {
-		authReq.Header.Set(uriHeader, forwardedUri)
+	if forwardedUri != "" && c.config.TrustForwardHeader {
+		absoluteUrl.Path = forwardedUri
 	} else if req.RequestURI != "" {
-		authReq.Header.Set(uriHeader, req.RequestURI)
+		absoluteUrl.Path = req.RequestURI
+	}
+
+	authReq.Header.Set(c.config.AuthRequestProtoHeader, absoluteUrl.Scheme)
+	authReq.Header.Set(c.config.AuthRequestHostHeader, absoluteUrl.Host)
+	authReq.Header.Set(c.config.AuthRequestUriHeader, absoluteUrl.Path)
+
+	if c.config.AbsoluteUrlHeader != "" {
+		authReq.Header.Set(c.config.AuthRequestAbsoluteUrlHeader, absoluteUrl.String())
 	}
 }
 
-func (c *Client) attachRequestHeaders(authReq *http.Request, req *http.Request) {
-	for _, header := range c.authRequestHeaders {
-		if values := req.Header.Get(header); values != "" {
-			authReq.Header.Set(header, values)
-		}
-	}
-
-	if c.authRequestHeadersRegex != nil {
-		for headerKey, headerValues := range req.Header {
-			if c.authRequestHeadersRegex.MatchString(headerKey) {
-				authReq.Header[headerKey] = headerValues
-			}
-		}
-	}
-}
-
-func (c *Client) attachRequestCookies(authReq *http.Request, req *http.Request) {
-	for _, cookieName := range c.addAuthCookiesToRequest {
-		if cookie, err := req.Cookie(cookieName); err == nil {
-			authReq.AddCookie(cookie)
-		}
-	}
-}
-
-func (c *Client) attachRequestBody(authReq *http.Request, req *http.Request) {
+func (c *Client) setAuthRequestBody(req *http.Request, authReq *http.Request) {
 	if req.Body != nil {
 		body, err := io.ReadAll(req.Body)
 		if err != nil {
@@ -182,8 +130,8 @@ func (c *Client) attachRequestBody(authReq *http.Request, req *http.Request) {
 		}
 
 		var truncatedBody []byte
-		if c.maxBodySize >= 0 && int64(len(body)) > c.maxBodySize {
-			truncatedBody = body[:c.maxBodySize]
+		if c.config.MaxBodySize >= 0 && int64(len(body)) > c.config.MaxBodySize {
+			truncatedBody = body[:c.config.MaxBodySize]
 		} else {
 			truncatedBody = body
 		}

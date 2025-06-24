@@ -15,7 +15,10 @@ func TestCreateAuthRequest(t *testing.T) {
 		Address: "http://localhost:8080",
 	}
 
-	client, err := internal.CreateClient(config)
+	configParsed, err := internal.ParseConfig(config)
+	require.NoError(t, err)
+
+	client, err := internal.NewClient(configParsed)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest("GET", "/", nil)
@@ -32,7 +35,10 @@ func TestCreateAuthRequest_PreserveMethod(t *testing.T) {
 		PreserveRequestMethod: true,
 	}
 
-	client, err := internal.CreateClient(config)
+	configParsed, err := internal.ParseConfig(config)
+	require.NoError(t, err)
+
+	client, err := internal.NewClient(configParsed)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest("POST", "/", nil)
@@ -60,7 +66,10 @@ func TestDo_Returns200(t *testing.T) {
 		Address: server.URL,
 	}
 
-	client, err := internal.CreateClient(config)
+	configParsed, err := internal.ParseConfig(config)
+	require.NoError(t, err)
+
+	client, err := internal.NewClient(configParsed)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest("GET", "/", nil)
@@ -84,7 +93,10 @@ func TestDo_Returns401(t *testing.T) {
 		Address: server.URL,
 	}
 
-	client, err := internal.CreateClient(config)
+	configParsed, err := internal.ParseConfig(config)
+	require.NoError(t, err)
+
+	client, err := internal.NewClient(configParsed)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest("GET", "/", nil)

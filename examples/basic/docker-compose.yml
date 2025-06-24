@@ -50,8 +50,10 @@ services:
 
       - traefik.http.middlewares.auth-allow.plugin.customizable-auth-forward.address=http://test-server:3000/auth
       - traefik.http.middlewares.auth-allow.plugin.customizable-auth-forward.headerPrefix=X-Original
-      - traefik.http.middlewares.auth-redirect.plugin.customizable-auth-forward.trustForwardHeader=false
+      - traefik.http.middlewares.auth-allow.plugin.customizable-auth-forward.trustForwardHeader=false
+      - traefik.http.middlewares.auth-allow.plugin.customizable-auth-forward.authRequestCookies=test
       - traefik.http.middlewares.auth-allow.plugin.customizable-auth-forward.authResponseHeadersRegex=^X-Auth-.*
+      - traefik.http.middlewares.auth-allow.plugin.customizable-auth-forward.addAuthCookiesToResponse=x-auth-session
 
       - traefik.http.middlewares.auth-deny.plugin.customizable-auth-forward.address=http://test-server:3000/auth/deny
       - traefik.http.middlewares.auth-deny.plugin.customizable-auth-forward.headerPrefix=X-Original

@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
 	"time"
 
 	"github.com/xabinapal/traefik-customizable-auth-forward-plugin/internal"
@@ -18,12 +17,11 @@ const (
 )
 
 type Plugin struct {
-	next   http.Handler
-	name   string
-	config *internal.Config
-	client *internal.Client
+	name string
+	next http.Handler
 
-	headersRegex *regexp.Regexp
+	config *internal.ConfigParsed
+	client *internal.Client
 }
 
 func CreateConfig() *internal.Config {
@@ -34,17 +32,20 @@ func CreateConfig() *internal.Config {
 			CA:                 "",
 			Cert:               "",
 			Key:                "",
+			MinVersion:         12,
+			MaxVersion:         13,
 			InsecureSkipVerify: false,
 		},
 
 		PreserveRequestMethod: false,
 
 		HeaderPrefix:       defaultHeaderPrefix,
+		AbsoluteUrlHeader:  "",
 		TrustForwardHeader: false,
 
 		AuthRequestHeaders:      []string{},
 		AuthRequestHeadersRegex: "",
-		AddAuthCookiesToRequest: []string{},
+		AuthRequestCookies:      []string{},
 
 		AuthResponseHeaders:      []string{},
 		AuthResponseHeadersRegex: "",
@@ -57,33 +58,23 @@ func CreateConfig() *internal.Config {
 }
 
 func New(ctx context.Context, next http.Handler, config *internal.Config, name string) (http.Handler, error) {
-	// Validate config
-	if config.Address == "" {
-		return nil, fmt.Errorf("address cannot be empty")
+	configParsed, err := internal.ParseConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing config: %v", err)
 	}
 
 	// Create HTTP client with custom configuration
-	client, err := internal.CreateClient(config)
+	client, err := internal.NewClient(configParsed)
 	if err != nil {
 		return nil, fmt.Errorf("error creating client: %v", err)
 	}
 
-	// Compile auth response headers regex
-	var headersRegex *regexp.Regexp
-	if config.AuthResponseHeadersRegex != "" {
-		re, err := regexp.Compile(config.AuthResponseHeadersRegex)
-		if err != nil {
-			return nil, fmt.Errorf("error compiling auth response headers regex: %v", err)
-		}
-		headersRegex = re
-	}
-
 	plugin := &Plugin{
-		next:         next,
-		name:         name,
-		config:       config,
-		client:       client,
-		headersRegex: headersRegex,
+		name: name,
+		next: next,
+
+		config: configParsed,
+		client: client,
 	}
 
 	return plugin, nil
@@ -113,6 +104,8 @@ func (cfa *Plugin) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	if authRes.StatusCode < http.StatusOK || authRes.StatusCode >= http.StatusMultipleChoices {
 		fmt.Printf("forwarding auth response to client\n")
 
+		internal.CopyHeaders(authRes.Header, rw.Header(), []string{})
+
 		location := authRes.Header.Get("Location")
 		if location != "" {
 			if cfa.config.PreserveLocationHeader {
@@ -134,7 +127,7 @@ func (cfa *Plugin) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 				}
 			}
 
-			rw.Header().Add("Location", location)
+			rw.Header().Set("Location", location)
 		}
 
 		rw.WriteHeader(authRes.StatusCode)
@@ -143,35 +136,14 @@ func (cfa *Plugin) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
 		return
 	}
 
-	cfa.attachAuthResponseHeaders(req, authRes)
-	cfa.attachAuthResponseCookies(req, authRes)
+	internal.CopyHeaders(authRes.Header, req.Header, cfa.config.AuthResponseHeaders)
+	internal.CopyHeadersRegex(authRes.Header, req.Header, cfa.config.AuthResponseHeadersRegex)
+
+	internal.CopyCookies(authRes, req, cfa.config.AddAuthCookiesToResponse)
 
 	cfa.next.ServeHTTP(rw, req)
-}
-
-func (cfa *Plugin) attachAuthResponseHeaders(req *http.Request, authRes *http.Response) {
-	for _, header := range cfa.config.AuthResponseHeaders {
-		header := http.CanonicalHeaderKey(header)
-
-		if values := authRes.Header.Values(header); len(values) > 0 {
-			req.Header.Add(header, values[0])
-		}
-	}
-
-	if cfa.headersRegex != nil {
-		for headerKey, headerValues := range authRes.Header {
-			headerKey = http.CanonicalHeaderKey(headerKey)
-
-			if cfa.headersRegex.MatchString(headerKey) {
-				req.Header[headerKey] = headerValues
-			}
-		}
-	}
-}
-
-func (cfa *Plugin) attachAuthResponseCookies(req *http.Request, authRes *http.Response) {
-	// TODO
 }

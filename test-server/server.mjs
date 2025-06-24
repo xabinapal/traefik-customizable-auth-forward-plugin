@@ -23,6 +23,8 @@ app.all('/', (req, res) => {
 });
 
 app.all('/auth', (req, res) => {
+  res.cookie('x-auth-session', '1234567890');
+
   res.set({
     'X-Auth-User': 'admin-user',
     'X-Auth-Email': 'admin@example.com',
