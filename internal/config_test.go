@@ -257,6 +257,19 @@ func TestParseConfig_FullConfiguration(t *testing.T) {
 		AuthResponseHeaders:      []string{"X-User", "X-Role"},
 		AuthResponseHeadersRegex: "^X-Auth-.*",
 		AddAuthCookiesToResponse: []string{"token", "refresh"},
+		StatusCodeGlobalMappings: map[int]int{
+			401: 403,
+			404: 410,
+		},
+		StatusCodePathMappings: []internal.PathMappingConfig{
+			{
+				Path: "/api",
+				Mappings: map[int]int{
+					401: 418,
+					500: 502,
+				},
+			},
+		},
 		TLS: &internal.TLSConfig{
 			CA:                 "/etc/ssl/ca.pem",
 			Cert:               "/etc/ssl/cert.pem",
@@ -286,6 +299,8 @@ func TestParseConfig_FullConfiguration(t *testing.T) {
 	test.AssertEqual(t, config.AuthRequestCookies, parsed.AuthRequestCookies)
 	test.AssertEqual(t, config.AuthResponseHeaders, parsed.AuthResponseHeaders)
 	test.AssertEqual(t, config.AddAuthCookiesToResponse, parsed.AddAuthCookiesToResponse)
+	test.AssertEqual(t, config.StatusCodeGlobalMappings, parsed.StatusCodeGlobalMappings)
+	test.AssertEqual(t, config.StatusCodePathMappings, parsed.StatusCodePathMappings)
 	test.AssertEqual(t, config.TLS, parsed.TLS)
 
 	// Verify computed headers
@@ -404,5 +419,172 @@ func TestParseConfig_TLS(t *testing.T) {
 				test.AssertContains(t, err.Error(), tc.errorMsg)
 			})
 		}
+	})
+}
+
+func TestParseConfig_StatusCodeMappings(t *testing.T) {
+	t.Run("global status code mappings are preserved", func(t *testing.T) {
+		config := &internal.Config{
+			Address: "http://auth.example.com",
+			StatusCodeGlobalMappings: map[int]int{
+				401: 403,
+				404: 401,
+				500: 502,
+			},
+		}
+
+		parsed, err := internal.ParseConfig(config)
+		test.RequireNoError(t, err)
+		test.RequireNotNil(t, parsed)
+
+		test.AssertEqual(t, config.StatusCodeGlobalMappings, parsed.StatusCodeGlobalMappings)
+		test.AssertEqual(t, 403, parsed.StatusCodeGlobalMappings[401])
+		test.AssertEqual(t, 401, parsed.StatusCodeGlobalMappings[404])
+		test.AssertEqual(t, 502, parsed.StatusCodeGlobalMappings[500])
+	})
+
+	t.Run("path status code mappings are preserved", func(t *testing.T) {
+		config := &internal.Config{
+			Address: "http://auth.example.com",
+			StatusCodePathMappings: []internal.PathMappingConfig{
+				{
+					Path: "/api",
+					Mappings: map[int]int{
+						401: 403,
+						404: 410,
+					},
+				},
+				{
+					Path: "/admin",
+					Mappings: map[int]int{
+						401: 404,
+						403: 404,
+					},
+				},
+			},
+		}
+
+		parsed, err := internal.ParseConfig(config)
+		test.RequireNoError(t, err)
+		test.RequireNotNil(t, parsed)
+
+		test.AssertEqual(t, len(config.StatusCodePathMappings), len(parsed.StatusCodePathMappings))
+
+		// Verify first mapping
+		test.AssertEqual(t, "/api", parsed.StatusCodePathMappings[0].Path)
+		test.AssertEqual(t, 403, parsed.StatusCodePathMappings[0].Mappings[401])
+		test.AssertEqual(t, 410, parsed.StatusCodePathMappings[0].Mappings[404])
+
+		// Verify second mapping
+		test.AssertEqual(t, "/admin", parsed.StatusCodePathMappings[1].Path)
+		test.AssertEqual(t, 404, parsed.StatusCodePathMappings[1].Mappings[401])
+		test.AssertEqual(t, 404, parsed.StatusCodePathMappings[1].Mappings[403])
+	})
+
+	t.Run("empty status code mappings are preserved", func(t *testing.T) {
+		config := &internal.Config{
+			Address:                  "http://auth.example.com",
+			StatusCodeGlobalMappings: map[int]int{},
+			StatusCodePathMappings:   []internal.PathMappingConfig{},
+		}
+
+		parsed, err := internal.ParseConfig(config)
+		test.RequireNoError(t, err)
+		test.RequireNotNil(t, parsed)
+
+		test.AssertNotNil(t, parsed.StatusCodeGlobalMappings)
+		test.AssertNotNil(t, parsed.StatusCodePathMappings)
+		test.AssertEmpty(t, parsed.StatusCodeGlobalMappings)
+		test.AssertEmpty(t, parsed.StatusCodePathMappings)
+	})
+
+	t.Run("nil status code mappings are handled", func(t *testing.T) {
+		config := &internal.Config{
+			Address:                  "http://auth.example.com",
+			StatusCodeGlobalMappings: nil,
+			StatusCodePathMappings:   nil,
+		}
+
+		parsed, err := internal.ParseConfig(config)
+		test.RequireNoError(t, err)
+		test.RequireNotNil(t, parsed)
+
+		// Should be nil (not converted to empty map/slice)
+		test.AssertNil(t, parsed.StatusCodeGlobalMappings)
+		test.AssertNil(t, parsed.StatusCodePathMappings)
+	})
+
+	t.Run("complex status code mappings configuration", func(t *testing.T) {
+		config := &internal.Config{
+			Address: "http://auth.example.com",
+			StatusCodeGlobalMappings: map[int]int{
+				401: 403,
+				404: 410,
+				500: 502,
+				503: 504,
+			},
+			StatusCodePathMappings: []internal.PathMappingConfig{
+				{
+					Path: "/api/v1",
+					Mappings: map[int]int{
+						401: 418, // I'm a teapot
+						403: 451, // Unavailable for legal reasons
+					},
+				},
+				{
+					Path: "/api/v2",
+					Mappings: map[int]int{
+						401: 429, // Too many requests
+						404: 406, // Not acceptable
+						500: 507, // Insufficient storage
+					},
+				},
+				{
+					Path: "/admin",
+					Mappings: map[int]int{
+						401: 404, // Hide admin existence
+						403: 404,
+						500: 404,
+					},
+				},
+			},
+		}
+
+		parsed, err := internal.ParseConfig(config)
+		test.RequireNoError(t, err)
+		test.RequireNotNil(t, parsed)
+
+		// Verify global mappings
+		test.AssertEqual(t, 4, len(parsed.StatusCodeGlobalMappings))
+		test.AssertEqual(t, 403, parsed.StatusCodeGlobalMappings[401])
+		test.AssertEqual(t, 410, parsed.StatusCodeGlobalMappings[404])
+		test.AssertEqual(t, 502, parsed.StatusCodeGlobalMappings[500])
+		test.AssertEqual(t, 504, parsed.StatusCodeGlobalMappings[503])
+
+		// Verify path mappings count
+		test.AssertEqual(t, 3, len(parsed.StatusCodePathMappings))
+
+		// Verify /api/v1 mappings
+		apiV1 := parsed.StatusCodePathMappings[0]
+		test.AssertEqual(t, "/api/v1", apiV1.Path)
+		test.AssertEqual(t, 2, len(apiV1.Mappings))
+		test.AssertEqual(t, 418, apiV1.Mappings[401])
+		test.AssertEqual(t, 451, apiV1.Mappings[403])
+
+		// Verify /api/v2 mappings
+		apiV2 := parsed.StatusCodePathMappings[1]
+		test.AssertEqual(t, "/api/v2", apiV2.Path)
+		test.AssertEqual(t, 3, len(apiV2.Mappings))
+		test.AssertEqual(t, 429, apiV2.Mappings[401])
+		test.AssertEqual(t, 406, apiV2.Mappings[404])
+		test.AssertEqual(t, 507, apiV2.Mappings[500])
+
+		// Verify /admin mappings
+		admin := parsed.StatusCodePathMappings[2]
+		test.AssertEqual(t, "/admin", admin.Path)
+		test.AssertEqual(t, 3, len(admin.Mappings))
+		test.AssertEqual(t, 404, admin.Mappings[401])
+		test.AssertEqual(t, 404, admin.Mappings[403])
+		test.AssertEqual(t, 404, admin.Mappings[500])
 	})
 }

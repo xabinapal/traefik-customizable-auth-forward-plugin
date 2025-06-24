@@ -13,8 +13,24 @@ import (
 )
 
 const (
-	defaultTimeout      = "30s"
-	defaultHeaderPrefix = "X-Forwarded"
+	defaultTimeout               = "30s"
+	defaultTlsMinVersion         = 12
+	defaultTlsMaxVersion         = 13
+	defaultTlsInsecureSkipVerify = false
+
+	defaultPreserveRequestMethod = false
+
+	defaultHeaderPrefix       = "X-Forwarded"
+	defaultAbsoluteUrlHeader  = ""
+	defaultTrustForwardHeader = false
+
+	defaultAuthRequestHeadersRegex = ""
+
+	defaultAuthResponseHeadersRegex = ""
+	defaultPreserveLocationHeader   = false
+
+	defaultForwardBody = false
+	defaultMaxBodySize = -1
 )
 
 type Plugin struct {
@@ -33,31 +49,31 @@ func CreateConfig() *internal.Config {
 			CA:                 "",
 			Cert:               "",
 			Key:                "",
-			MinVersion:         12,
-			MaxVersion:         13,
-			InsecureSkipVerify: false,
+			MinVersion:         defaultTlsMinVersion,
+			MaxVersion:         defaultTlsMaxVersion,
+			InsecureSkipVerify: defaultTlsInsecureSkipVerify,
 		},
 
-		PreserveRequestMethod: false,
+		PreserveRequestMethod: defaultPreserveRequestMethod,
 
 		HeaderPrefix:       defaultHeaderPrefix,
-		AbsoluteUrlHeader:  "",
-		TrustForwardHeader: false,
+		AbsoluteUrlHeader:  defaultAbsoluteUrlHeader,
+		TrustForwardHeader: defaultTrustForwardHeader,
 
 		AuthRequestHeaders:      []string{},
-		AuthRequestHeadersRegex: "",
+		AuthRequestHeadersRegex: defaultAuthRequestHeadersRegex,
 		AuthRequestCookies:      []string{},
 
 		AuthResponseHeaders:      []string{},
-		AuthResponseHeadersRegex: "",
+		AuthResponseHeadersRegex: defaultAuthResponseHeadersRegex,
 		AddAuthCookiesToResponse: []string{},
-		PreserveLocationHeader:   false,
+		PreserveLocationHeader:   defaultPreserveLocationHeader,
 
 		StatusCodeGlobalMappings: map[int]int{},
 		StatusCodePathMappings:   []internal.PathMappingConfig{},
 
-		ForwardBody: false,
-		MaxBodySize: -1,
+		ForwardBody: defaultForwardBody,
+		MaxBodySize: defaultMaxBodySize,
 	}
 }
 
@@ -114,7 +130,12 @@ func (cfa *Plugin) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 		fmt.Printf("forwarding auth response to client with status code %v\n", mappedStatusCode)
 
-		httputil.CopyHeaders(authRes.Header, rw.Header(), []string{})
+		// Copy all headers from auth response to preserve them
+		for key, values := range authRes.Header {
+			for _, value := range values {
+				rw.Header().Add(key, value)
+			}
+		}
 
 		location := authRes.Header.Get("Location")
 		if location != "" {

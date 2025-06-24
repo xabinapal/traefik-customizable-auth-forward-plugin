@@ -16,35 +16,37 @@ import (
 
 func TestNewClient(t *testing.T) {
 	t.Run("creates client with default HTTP settings", func(t *testing.T) {
-		config := &ConfigParsed{
-			Config: Config{
-				Address: "http://auth.example.com",
-				Timeout: "30s",
-			},
+		config := &Config{
+			Address: "http://auth.example.com",
+			Timeout: "30s",
 		}
 
-		client, err := NewClient(config)
+		parsed, err := ParseConfig(config)
+		test.RequireNoError(t, err)
+
+		client, err := NewClient(parsed)
 		test.RequireNoError(t, err)
 		test.AssertNotNil(t, client)
 		test.AssertNotNil(t, client.client)
-		test.AssertEqual(t, config, client.config)
+		test.AssertEqual(t, parsed, client.config)
 		test.AssertEqual(t, 30*time.Second, client.client.Timeout)
 	})
 
 	t.Run("creates client with TLS configuration", func(t *testing.T) {
-		config := &ConfigParsed{
-			Config: Config{
-				Address: "https://auth.example.com",
-				Timeout: "15s",
-				TLS: &TLSConfig{
-					MinVersion:         12, // Internal version 12 = TLS 1.2
-					MaxVersion:         13, // Internal version 13 = TLS 1.3
-					InsecureSkipVerify: true,
-				},
+		config := &Config{
+			Address: "https://auth.example.com",
+			Timeout: "15s",
+			TLS: &TLSConfig{
+				MinVersion:         12, // Internal version 12 = TLS 1.2
+				MaxVersion:         13, // Internal version 13 = TLS 1.3
+				InsecureSkipVerify: true,
 			},
 		}
 
-		client, err := NewClient(config)
+		parsed, err := ParseConfig(config)
+		test.RequireNoError(t, err)
+
+		client, err := NewClient(parsed)
 		test.RequireNoError(t, err)
 		test.AssertNotNil(t, client)
 
@@ -62,14 +64,15 @@ func TestNewClient(t *testing.T) {
 	})
 
 	t.Run("client does not follow redirects", func(t *testing.T) {
-		config := &ConfigParsed{
-			Config: Config{
-				Address: "http://auth.example.com",
-				Timeout: "30s",
-			},
+		config := &Config{
+			Address: "http://auth.example.com",
+			Timeout: "30s",
 		}
 
-		client, err := NewClient(config)
+		parsed, err := ParseConfig(config)
+		test.RequireNoError(t, err)
+
+		client, err := NewClient(parsed)
 		test.RequireNoError(t, err)
 
 		// Create a test request
@@ -81,20 +84,27 @@ func TestNewClient(t *testing.T) {
 	})
 
 	t.Run("nil TLS config works", func(t *testing.T) {
-		config := &ConfigParsed{
-			Config: Config{
-				Address: "http://auth.example.com",
-				Timeout: "30s",
-				TLS:     nil,
-			},
+		config := &Config{
+			Address: "http://auth.example.com",
+			Timeout: "30s",
+			TLS:     nil,
 		}
 
-		client, err := NewClient(config)
+		parsed, err := ParseConfig(config)
+		test.RequireNoError(t, err)
+
+		client, err := NewClient(parsed)
 		test.RequireNoError(t, err)
 		test.AssertNotNil(t, client)
 
-		// Should use default transport when TLS is nil
-		test.AssertNil(t, client.client.Transport)
+		// When TLS is nil, ParseConfig should provide sensible defaults
+		test.AssertNotNil(t, parsed.TLS)
+		test.AssertEqual(t, uint16(12), parsed.TLS.MinVersion)
+		test.AssertEqual(t, uint16(13), parsed.TLS.MaxVersion)
+		test.AssertTrue(t, parsed.TLS.InsecureSkipVerify)
+
+		// Client should have TLS transport configured with defaults
+		test.AssertNotNil(t, client.client.Transport)
 	})
 }
 

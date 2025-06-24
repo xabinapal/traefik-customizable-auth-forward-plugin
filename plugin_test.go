@@ -43,6 +43,12 @@ func TestCreateConfig(t *testing.T) {
 	test.AssertEmpty(t, config.AuthRequestCookies)
 	test.AssertEmpty(t, config.AuthResponseHeaders)
 	test.AssertEmpty(t, config.AddAuthCookiesToResponse)
+
+	// Verify status code mapping defaults
+	test.AssertNotNil(t, config.StatusCodeGlobalMappings)
+	test.AssertNotNil(t, config.StatusCodePathMappings)
+	test.AssertEmpty(t, config.StatusCodeGlobalMappings)
+	test.AssertEmpty(t, config.StatusCodePathMappings)
 }
 
 func TestNew(t *testing.T) {
@@ -684,5 +690,356 @@ func TestServeHTTP_AdvancedHeaderScenarios(t *testing.T) {
 				}
 			})
 		}
+	})
+}
+
+func TestServeHTTP_StatusCodeMapping(t *testing.T) {
+	t.Run("global status code mapping", func(t *testing.T) {
+		tests := []struct {
+			name               string
+			authStatusCode     int
+			globalMappings     map[int]int
+			expectedStatusCode int
+		}{
+			{
+				name:           "401 mapped to 403",
+				authStatusCode: http.StatusUnauthorized,
+				globalMappings: map[int]int{
+					http.StatusUnauthorized: http.StatusForbidden,
+				},
+				expectedStatusCode: http.StatusForbidden,
+			},
+			{
+				name:           "404 mapped to 401",
+				authStatusCode: http.StatusNotFound,
+				globalMappings: map[int]int{
+					http.StatusNotFound: http.StatusUnauthorized,
+				},
+				expectedStatusCode: http.StatusUnauthorized,
+			},
+			{
+				name:           "unmapped status code remains unchanged",
+				authStatusCode: http.StatusBadRequest,
+				globalMappings: map[int]int{
+					http.StatusUnauthorized: http.StatusForbidden,
+				},
+				expectedStatusCode: http.StatusBadRequest,
+			},
+			{
+				name:           "multiple mappings - correct one applied",
+				authStatusCode: http.StatusNotFound,
+				globalMappings: map[int]int{
+					http.StatusUnauthorized: http.StatusForbidden,
+					http.StatusNotFound:     http.StatusGone,
+					http.StatusBadRequest:   http.StatusTooManyRequests,
+				},
+				expectedStatusCode: http.StatusGone,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				// Create auth server that returns the specified status code
+				authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(tt.authStatusCode)
+					_, _ = w.Write([]byte("Auth response"))
+				}))
+				defer authServer.Close()
+
+				config := plugin.CreateConfig()
+				config.Address = authServer.URL
+				config.StatusCodeGlobalMappings = tt.globalMappings
+
+				next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					t.Error("next handler should not be called for non-2xx auth response")
+				})
+
+				handler, err := plugin.New(context.Background(), next, config, "test-plugin")
+				test.RequireNoError(t, err)
+
+				req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
+				recorder := httptest.NewRecorder()
+
+				handler.ServeHTTP(recorder, req)
+
+				test.AssertEqual(t, tt.expectedStatusCode, recorder.Code)
+				test.AssertEqual(t, "Auth response", recorder.Body.String())
+			})
+		}
+	})
+
+	t.Run("path-based status code mapping", func(t *testing.T) {
+		tests := []struct {
+			name               string
+			requestPath        string
+			authStatusCode     int
+			pathMappings       []internal.PathMappingConfig
+			expectedStatusCode int
+		}{
+			{
+				name:           "single path mapping matches",
+				requestPath:    "/api/users",
+				authStatusCode: http.StatusUnauthorized,
+				pathMappings: []internal.PathMappingConfig{
+					{
+						Path: "/api",
+						Mappings: map[int]int{
+							http.StatusUnauthorized: http.StatusForbidden,
+						},
+					},
+				},
+				expectedStatusCode: http.StatusForbidden,
+			},
+			{
+				name:           "path doesn't match - no mapping applied",
+				requestPath:    "/web/dashboard",
+				authStatusCode: http.StatusUnauthorized,
+				pathMappings: []internal.PathMappingConfig{
+					{
+						Path: "/api",
+						Mappings: map[int]int{
+							http.StatusUnauthorized: http.StatusForbidden,
+						},
+					},
+				},
+				expectedStatusCode: http.StatusUnauthorized,
+			},
+			{
+				name:           "multiple path mappings - longest match wins",
+				requestPath:    "/api/v1/users",
+				authStatusCode: http.StatusUnauthorized,
+				pathMappings: []internal.PathMappingConfig{
+					{
+						Path: "/api",
+						Mappings: map[int]int{
+							http.StatusUnauthorized: http.StatusForbidden,
+						},
+					},
+					{
+						Path: "/api/v1",
+						Mappings: map[int]int{
+							http.StatusUnauthorized: http.StatusTeapot, // 418
+						},
+					},
+				},
+				expectedStatusCode: http.StatusTeapot,
+			},
+			{
+				name:           "path matches but status code not in mapping",
+				requestPath:    "/api/users",
+				authStatusCode: http.StatusNotFound,
+				pathMappings: []internal.PathMappingConfig{
+					{
+						Path: "/api",
+						Mappings: map[int]int{
+							http.StatusUnauthorized: http.StatusForbidden,
+						},
+					},
+				},
+				expectedStatusCode: http.StatusNotFound,
+			},
+			{
+				name:           "exact path match takes precedence",
+				requestPath:    "/api/v1/users/123",
+				authStatusCode: http.StatusUnauthorized,
+				pathMappings: []internal.PathMappingConfig{
+					{
+						Path: "/api",
+						Mappings: map[int]int{
+							http.StatusUnauthorized: http.StatusForbidden,
+						},
+					},
+					{
+						Path: "/api/v1/users",
+						Mappings: map[int]int{
+							http.StatusUnauthorized: http.StatusGone,
+						},
+					},
+					{
+						Path: "/api/v1",
+						Mappings: map[int]int{
+							http.StatusUnauthorized: http.StatusTeapot,
+						},
+					},
+				},
+				expectedStatusCode: http.StatusGone,
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				// Create auth server that returns the specified status code
+				authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(tt.authStatusCode)
+					_, _ = w.Write([]byte("Auth response"))
+				}))
+				defer authServer.Close()
+
+				config := plugin.CreateConfig()
+				config.Address = authServer.URL
+				config.StatusCodePathMappings = tt.pathMappings
+
+				next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					t.Error("next handler should not be called for non-2xx auth response")
+				})
+
+				handler, err := plugin.New(context.Background(), next, config, "test-plugin")
+				test.RequireNoError(t, err)
+
+				req := httptest.NewRequest(http.MethodGet, "http://example.com"+tt.requestPath, nil)
+				recorder := httptest.NewRecorder()
+
+				handler.ServeHTTP(recorder, req)
+
+				test.AssertEqual(t, tt.expectedStatusCode, recorder.Code)
+				test.AssertEqual(t, "Auth response", recorder.Body.String())
+			})
+		}
+	})
+
+	t.Run("path mapping takes precedence over global mapping", func(t *testing.T) {
+		authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte("Auth response"))
+		}))
+		defer authServer.Close()
+
+		config := plugin.CreateConfig()
+		config.Address = authServer.URL
+		config.StatusCodeGlobalMappings = map[int]int{
+			http.StatusUnauthorized: http.StatusForbidden,
+		}
+		config.StatusCodePathMappings = []internal.PathMappingConfig{
+			{
+				Path: "/api",
+				Mappings: map[int]int{
+					http.StatusUnauthorized: http.StatusTeapot,
+				},
+			},
+		}
+
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Error("next handler should not be called for non-2xx auth response")
+		})
+
+		handler, err := plugin.New(context.Background(), next, config, "test-plugin")
+		test.RequireNoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/api/users", nil)
+		recorder := httptest.NewRecorder()
+
+		handler.ServeHTTP(recorder, req)
+
+		// Path mapping should take precedence over global mapping
+		test.AssertEqual(t, http.StatusTeapot, recorder.Code)
+		test.AssertEqual(t, "Auth response", recorder.Body.String())
+	})
+
+	t.Run("no path match falls back to global mapping", func(t *testing.T) {
+		authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte("Auth response"))
+		}))
+		defer authServer.Close()
+
+		config := plugin.CreateConfig()
+		config.Address = authServer.URL
+		config.StatusCodeGlobalMappings = map[int]int{
+			http.StatusUnauthorized: http.StatusForbidden,
+		}
+		config.StatusCodePathMappings = []internal.PathMappingConfig{
+			{
+				Path: "/api",
+				Mappings: map[int]int{
+					http.StatusUnauthorized: http.StatusTeapot,
+				},
+			},
+		}
+
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Error("next handler should not be called for non-2xx auth response")
+		})
+
+		handler, err := plugin.New(context.Background(), next, config, "test-plugin")
+		test.RequireNoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/web/dashboard", nil)
+		recorder := httptest.NewRecorder()
+
+		handler.ServeHTTP(recorder, req)
+
+		// Should fall back to global mapping since /web doesn't match /api
+		test.AssertEqual(t, http.StatusForbidden, recorder.Code)
+		test.AssertEqual(t, "Auth response", recorder.Body.String())
+	})
+
+	t.Run("2xx status codes are not affected by mapping", func(t *testing.T) {
+		authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Auth-User", "john.doe")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("OK"))
+		}))
+		defer authServer.Close()
+
+		config := plugin.CreateConfig()
+		config.Address = authServer.URL
+		config.StatusCodeGlobalMappings = map[int]int{
+			http.StatusOK: http.StatusTeapot, // This should not be applied
+		}
+		config.AuthResponseHeaders = []string{"X-Auth-User"}
+
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			test.AssertEqual(t, "john.doe", r.Header.Get("X-Auth-User"))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("Success from next handler"))
+		})
+
+		handler, err := plugin.New(context.Background(), next, config, "test-plugin")
+		test.RequireNoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
+		recorder := httptest.NewRecorder()
+
+		handler.ServeHTTP(recorder, req)
+
+		// 2xx status codes should not be mapped and should continue to next handler
+		test.AssertEqual(t, http.StatusOK, recorder.Code)
+		test.AssertEqual(t, "Success from next handler", recorder.Body.String())
+	})
+
+	t.Run("status code mapping preserves headers", func(t *testing.T) {
+		authServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("WWW-Authenticate", "Bearer realm=\"API\"")
+			w.Header().Set("X-Error-Code", "AUTH_FAILED")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte("Unauthorized"))
+		}))
+		defer authServer.Close()
+
+		config := plugin.CreateConfig()
+		config.Address = authServer.URL
+		config.StatusCodeGlobalMappings = map[int]int{
+			http.StatusUnauthorized: http.StatusForbidden,
+		}
+
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Error("next handler should not be called for non-2xx auth response")
+		})
+
+		handler, err := plugin.New(context.Background(), next, config, "test-plugin")
+		test.RequireNoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
+		recorder := httptest.NewRecorder()
+
+		handler.ServeHTTP(recorder, req)
+
+		test.AssertEqual(t, http.StatusForbidden, recorder.Code)
+		test.AssertEqual(t, "Unauthorized", recorder.Body.String())
+		// Check that headers are preserved - they should be copied from auth response
+		wwwAuth := recorder.Header().Get("WWW-Authenticate")
+		errorCode := recorder.Header().Get("X-Error-Code")
+		test.AssertEqual(t, "Bearer realm=\"API\"", wwwAuth, "WWW-Authenticate header should be preserved")
+		test.AssertEqual(t, "AUTH_FAILED", errorCode, "X-Error-Code header should be preserved")
 	})
 }

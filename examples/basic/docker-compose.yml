@@ -5,7 +5,7 @@ services:
   traefik:
     image: docker.io/library/traefik:v3.4.1
     command:
-      - --log.level=TRACE
+      - --log.level=DEBUG
       - --accesslog=true
 
       - --api.insecure=true
@@ -44,6 +44,12 @@ services:
       - traefik.http.routers.test-server-redirect-relative.rule=Path(`/redirect/relative`)
       - traefik.http.routers.test-server-redirect-relative.middlewares=auth-redirect-relative,strip-prefix
 
+      - traefik.http.routers.test-server-mapping-global.rule=Path(`/mapping/global`)
+      - traefik.http.routers.test-server-mapping-global.middlewares=auth-mapping-global,strip-prefix
+
+      - traefik.http.routers.test-server-mapping-path.rule=Path(`/mapping/path`)
+      - traefik.http.routers.test-server-mapping-path.middlewares=auth-mapping-path,strip-prefix
+
       - traefik.http.services.test-server.loadbalancer.server.port=3000
 
       - traefik.http.middlewares.strip-prefix.stripprefixregex.regex=/.*
@@ -57,7 +63,7 @@ services:
 
       - traefik.http.middlewares.auth-deny.plugin.customizable-auth-forward.address=http://test-server:3000/auth/deny
       - traefik.http.middlewares.auth-deny.plugin.customizable-auth-forward.headerPrefix=X-Original
-      - traefik.http.middlewares.auth-redirect.plugin.customizable-auth-forward.trustForwardHeader=false
+      - traefik.http.middlewares.auth-deny.plugin.customizable-auth-forward.trustForwardHeader=false
       - traefik.http.middlewares.auth-deny.plugin.customizable-auth-forward.authResponseHeadersRegex=^X-Auth-.*
 
       - traefik.http.middlewares.auth-redirect.plugin.customizable-auth-forward.address=http://test-server:3000/auth/redirect
@@ -72,6 +78,20 @@ services:
       - traefik.http.middlewares.auth-redirect-relative.plugin.customizable-auth-forward.authResponseHeadersRegex=^X-Auth-.*
       - traefik.http.middlewares.auth-redirect-relative.plugin.customizable-auth-forward.preserveLocationHeader=true
 
+      - traefik.http.middlewares.auth-mapping-global.plugin.customizable-auth-forward.address=http://test-server:3000/auth/deny
+      - traefik.http.middlewares.auth-mapping-global.plugin.customizable-auth-forward.headerPrefix=X-Original
+      - traefik.http.middlewares.auth-mapping-global.plugin.customizable-auth-forward.trustForwardHeader=false
+      - traefik.http.middlewares.auth-mapping-global.plugin.customizable-auth-forward.authResponseHeadersRegex=^X-Auth-.*
+      - traefik.http.middlewares.auth-mapping-global.plugin.customizable-auth-forward.statusCodeGlobalMappings.401=403
+
+      - traefik.http.middlewares.auth-mapping-path.plugin.customizable-auth-forward.address=http://test-server:3000/auth/deny
+      - traefik.http.middlewares.auth-mapping-path.plugin.customizable-auth-forward.headerPrefix=X-Original
+      - traefik.http.middlewares.auth-mapping-path.plugin.customizable-auth-forward.trustForwardHeader=false
+      - traefik.http.middlewares.auth-mapping-path.plugin.customizable-auth-forward.authResponseHeadersRegex=^X-Auth-.*
+      - traefik.http.middlewares.auth-mapping-path.plugin.customizable-auth-forward.statusCodePathMappings[0].path=/mapping
+      - traefik.http.middlewares.auth-mapping-path.plugin.customizable-auth-forward.statusCodePathMappings[0].mappings.401=500
+      - traefik.http.middlewares.auth-mapping-path.plugin.customizable-auth-forward.statusCodePathMappings[1].path=/mapping/path
+      - traefik.http.middlewares.auth-mapping-path.plugin.customizable-auth-forward.statusCodePathMappings[1].mappings.401=403
 
 networks:
   traefik:
